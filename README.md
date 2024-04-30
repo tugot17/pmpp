@@ -198,18 +198,18 @@ Consider the following CUDA kernel and the corresponding host function
 that calls it:
 
 ```c
-__global__ void foo_kernel(float* a, float* b, unsigned int N) {
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    
-    if (i < N) {
-        b[i] = 2.7f * a[i] - 4.3f;
-    }
-}
-
-void foo(float* a_d, float* b_d) {
-    unsigned int N = 200000;
-    foo_kernel<<<(N + 128 - 1) / 128, 128>>>(a_d, b_d, N);
-}
+01 __global__ void foo_kernel(float* a, float* b, unsigned int N) {
+02     unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
+03     
+04     if (i < N) {
+05         b[i] = 2.7f * a[i] - 4.3f;
+06     }
+07 }
+08 
+09 void foo(float* a_d, float* b_d) {
+10     unsigned int N = 200000;
+11     foo_kernel<<<(N + 128 - 1) / 128, 128>>>(a_d, b_d, N);
+12 }
 ```
 
 **a. What is the number of threads per block?**
