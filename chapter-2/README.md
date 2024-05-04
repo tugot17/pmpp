@@ -1,11 +1,23 @@
-# pmpp
+# Chapter two
 Solutions to the Programming Massively Parallel Processors book
 
+## Code
 
+In chapter two create just a basic vector multiplication kernel. The kernel itself can be found in [vecMul.cu](code/vecMul.cu)
 
-# CUDA Exercises and Solutions
+### C
+To run the C code just run the [Makefile](code/Makefile)
 
-This README provides exercises and solutions related to using threads and blocks in CUDA for vector addition operations.
+```bash
+cd code
+```
+
+```bash
+make
+```
+
+### Python
+
 
 ## Exercises
 

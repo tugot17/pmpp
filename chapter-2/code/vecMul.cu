@@ -69,9 +69,6 @@ int main() {
     clock_t end_device = clock();
     double time_device = (double)(end_device - start_device) / CLOCKS_PER_SEC;
 
-    // for(int i = 0; i < n; i++){
-    //     printf("Element %d = %.1f\n", i, *(C + i));
-    // }
 
     printf("Time taken for vecMulHost: %f seconds\n", time_host);
     printf("Time taken for vecMulDevice: %f seconds\n", time_device);
