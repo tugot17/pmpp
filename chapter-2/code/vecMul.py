@@ -17,7 +17,6 @@ def vector_multipication_loop(A: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
 
 def compile_extension():
     cuda_source = (Path(__file__).parent / "vecMulTorchTensor.cu").read_text()
-    # cuda_source = Path("vecMulTorchTensor.cu").read_text()
     cpp_source = "torch::Tensor vector_multiplication(torch::Tensor A, torch::Tensor B_h);"
 
     extension = load_inline(

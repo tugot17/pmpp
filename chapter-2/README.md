@@ -18,6 +18,17 @@ make
 
 ### Python
 
+Set up the python env and install the required packages (`torch` and `Ninja`).
+
+```bash
+pip install -r requirements.txt
+```
+
+and run the python script
+
+```
+python vecMul.py
+```
 
 ## Exercises
 
