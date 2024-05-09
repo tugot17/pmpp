@@ -11,7 +11,7 @@ void rgtToGrayscaleKernel(unsigned char* Pin, unsigned char* Pout, int width, in
 
     const int CHANNELS = 3;
 
-    if (col <= width && row <= height){
+    if (col < width && row < height){
         //row major order 
         int grayOffset = row * width + col;
         int rgbOffset = grayOffset * CHANNELS;
