@@ -19,7 +19,7 @@ def compile_extension():
     cuda_source = (Path(__file__).parent / "vecMulTorchTensor.cu").read_text()
     cpp_source = "torch::Tensor vector_multiplication(torch::Tensor A, torch::Tensor B_h);"
 
-    extension = load_inline(
+    return load_inline(
         name="extension",
         cpp_sources=cpp_source,
         cuda_sources=cuda_source,
@@ -27,8 +27,6 @@ def compile_extension():
         with_cuda=True,
         # extra_cuda_cflags=["-O2"]
     )
-
-    return extension
 
 def main():
     ext = compile_extension()
