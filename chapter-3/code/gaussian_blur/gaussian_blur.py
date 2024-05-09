@@ -1,8 +1,10 @@
 from pathlib import Path
-from torchvision.io import read_image, write_png
-from torch.utils.cpp_extension import load_inline
 
-def compile_extension(): 
+from torch.utils.cpp_extension import load_inline
+from torchvision.io import read_image, write_png
+
+
+def compile_extension():
     cuda_source = (Path(__file__).parent / "rgb_to_grayscale.cu").read_text()
     cpp_source = "torch::Tensor rgb_to_grey(torch::Tensor img);"
 
@@ -11,8 +13,9 @@ def compile_extension():
         cpp_sources=cpp_source,
         cuda_sources=cuda_source,
         functions=["rgb_to_grey"],
-        with_cuda=True
+        with_cuda=True,
     )
+
 
 def main():
     current_dir = Path(__file__).parent

@@ -46,7 +46,7 @@ Consider the following CUDA kernel and the corresponding host function that call
 
 **a. What is the number of threads per block?**
 
-The number of threads per block can be infered from the variable `gd` (gridDim). It is `((N - 1) / 32 + 1, (M - 1) / 32 + 1)`, where `N=1500` and `M=300`. Hence `((150 - 1) / 32 + 1, (300 - 1) / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> (the integer division) `(149 / 32 + 1, 299 / 32 + 1)` -> `4 + 1, 9+1` -> `5, 10`, so the number of threads per block is `5 x 10 = 50`
+The number of threads per block can be inferred from the variable `gd` (gridDim). It is `((N - 1) / 32 + 1, (M - 1) / 32 + 1)`, where `N=1500` and `M=300`. Hence `((150 - 1) / 32 + 1, (300 - 1) / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> (the integer division) `(149 / 32 + 1, 299 / 32 + 1)` -> `4 + 1, 9+1` -> `5, 10`, so the number of threads per block is `5 x 10 = 50`
 
 **b. What is the number of threads in the grid?**
 

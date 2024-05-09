@@ -46,7 +46,7 @@ python vecMul.py
   
 <details>
   
-**C** it would be `i = blockIdx.x * blockDim.x + threadIdx.x` We need all three of these, we need `blockIdx.x` to identify the block and the `blockDim.x` to identify how big each block is. Each of the blocks has the same lengt (e.g. 256). So assuming we want to run the kernel for the 128th element of block in block one we would assign i to `1 * 256 + 128 = 384`
+**C** it would be `i = blockIdx.x * blockDim.x + threadIdx.x` We need all three of these, we need `blockIdx.x` to identify the block and the `blockDim.x` to identify how big each block is. Each of the blocks has the same length (e.g. 256). So assuming we want to run the kernel for the 128th element of block in block one we would assign i to `1 * 256 + 128 = 384`
 
 </details>
 
@@ -79,7 +79,7 @@ python vecMul.py
 **Solution:**
 
 <details>
-**D** We want each block to process $ 2 \times BLOCKSIZE$ elements. Assuming the block size is 256, this would mean that the block 0 will process elements from 0 to 511 . 0 to 255 from the first section and 256 to 511 in section two. So the example indices processed by a thread will be $(0, 256), (1, 257) \dots (255, 511)$. For the block 1 will need to skip the 256 to 511. To do so we need to double the portion of the thread id indcated by the block size, hence the `i=blockIdx.x*blockDim.x*2 + threadIdx.x`
+**D** We want each block to process $ 2 \times BLOCKSIZE$ elements. Assuming the block size is 256, this would mean that the block 0 will process elements from 0 to 511 . 0 to 255 from the first section and 256 to 511 in section two. So the example indices processed by a thread will be $(0, 256), (1, 257) \dots (255, 511)$. For the block 1 will need to skip the 256 to 511. To do so we need to double the portion of the thread id indicated by the block size, hence the `i=blockIdx.x*blockDim.x*2 + threadIdx.x`
 </details>
 
 
@@ -107,7 +107,7 @@ python vecMul.py
 
 <details>
 
-**C**. Each blok has 1024 threads, we need to have 8 thread blocks to process 8000 th elements. Meaning there will be `8 * 1024 = 8192` threads.  
+**C**. Each block has 1024 threads, we need to have 8 thread blocks to process 8000 th elements. Meaning there will be `8 * 1024 = 8192` threads.  
 
 </details>
 
@@ -255,7 +255,7 @@ As above `1563`
 As above `1563*128 = 200064`
 
 **e. What is the number of threads that execute the code on line 04?**
-Here we have an if statement limiting the execution to only the memory allocated in `cudaMalloc`, in this case `N=200000` so the last 64 threds will not be used.
+Here we have an if statement limiting the execution to only the memory allocated in `cudaMalloc`, in this case `N=200000` so the last 64 threads will not be used.
 
 ### Exercise 10:
 **Question:** A new summer intern was frustrated with CUDA. He has been complaining that CUDA is very tedious. He had to declare many functions that he plans to execute on both the host and the device twice, once as a host function and once as a device function. What is your response?
