@@ -4,7 +4,7 @@
 
 
 __global__
-void rgtToGrayscaleKernel(unsigned char* Pin, unsigned char* Pout, int width, int height){
+void rgbToGrayscaleKernel(unsigned char* Pin, unsigned char* Pout, int width, int height){
 
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -42,7 +42,7 @@ torch::Tensor rgb_to_gray(torch::Tensor img){
     
     auto result = torch::empty({height, width, 1}, torch::TensorOptions().dtype(torch::kByte).device(img.device()));
 
-    rgtToGrayscaleKernel<<<dimGrid, dimBlock, 0, torch::cuda::getCurrentCUDAStream()>>>(img.data_ptr<unsigned char>(), result.data_ptr<unsigned char>(), width, height);
+    rgbToGrayscaleKernel<<<dimGrid, dimBlock, 0, torch::cuda::getCurrentCUDAStream()>>>(img.data_ptr<unsigned char>(), result.data_ptr<unsigned char>(), width, height);
     
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
