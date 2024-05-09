@@ -25,19 +25,21 @@ void rgtToGrayscaleKernel(unsigned char* Pin, unsigned char* Pout, int width, in
 
 }
 
+inline unsigned int cdiv(unsigned int a, unsigned int b) {
+  return (a + b - 1) / b;
+}
+
 
 torch::Tensor rgb_to_grey(torch::Tensor img){
     assert(img.device().type() == torch::kCUDA);
     assert(img.dtype() == torch::kByte);
     
-
     const auto height = img.size(0);
     const auto width = img.size(1);
     
-    dim3 dimGrid(ceil(width/16), ceil(height/ 16));
-    dim3 dimBlock(16, 16);
-
-    // torch::Tensor result = torch::empty_like(img);
+    dim3 dimBlock(32, 32);
+    dim3 dimGrid(cdiv(width, dimBlock.x), cdiv(height, dimBlock.y));
+    
     auto result = torch::empty({height, width, 1}, torch::TensorOptions().dtype(torch::kByte).device(img.device()));
 
     rgtToGrayscaleKernel<<<dimGrid, dimBlock, 0, torch::cuda::getCurrentCUDAStream()>>>(img.data_ptr<unsigned char>(), result.data_ptr<unsigned char>(), width, height);
