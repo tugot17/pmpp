@@ -6,13 +6,13 @@ from torchvision.io import read_image, write_png
 
 def compile_extension():
     cuda_source = (Path(__file__).parent / "rgb_to_grayscale.cu").read_text()
-    cpp_source = "torch::Tensor rgb_to_grey(torch::Tensor img);"
+    cpp_source = "torch::Tensor rgb_to_gray(torch::Tensor img);"
 
     return load_inline(
         name="rgb_to_grey_extension",
         cpp_sources=cpp_source,
         cuda_sources=cuda_source,
-        functions=["rgb_to_grey"],
+        functions=["rgb_to_gray"],
         with_cuda=True,
     )
 
@@ -27,7 +27,7 @@ def main():
     print()
 
     ext = compile_extension()
-    y = ext.rgb_to_grey(x)
+    y = ext.rgb_to_gray(x)
 
     print("Converted:")
     print("mean:", y.float().mean())

@@ -30,7 +30,7 @@ inline unsigned int cdiv(unsigned int a, unsigned int b) {
 }
 
 
-torch::Tensor rgb_to_grey(torch::Tensor img){
+torch::Tensor rgb_to_gray(torch::Tensor img){
     assert(img.device().type() == torch::kCUDA);
     assert(img.dtype() == torch::kByte);
     
