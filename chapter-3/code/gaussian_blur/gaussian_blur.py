@@ -6,7 +6,7 @@ from torchvision.io import read_image, write_png
 
 def compile_extension():
     cuda_source = (Path(__file__).parent / "gaussian_blur.cu").read_text()
-    cpp_source = "torch::Tensor gaussian_blur(torch::Tensor img);"
+    cpp_source = "torch::Tensor gaussian_blur(torch::Tensor img, int blurSize);"
 
     return load_inline(
         name="gaussian_blur_extension",
@@ -27,7 +27,9 @@ def main():
     print()
 
     ext = compile_extension()
-    y = ext.gaussian_blur(x)
+    blur_size = 3
+
+    y = ext.gaussian_blur(x, blur_size)
 
     print("Converted:")
     print("mean:", y.float().mean())

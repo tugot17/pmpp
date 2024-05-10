@@ -40,7 +40,7 @@ inline unsigned int cdiv(unsigned int a, unsigned int b) {
 }
 
 
-torch::Tensor gaussian_blur(torch::Tensor img){
+torch::Tensor gaussian_blur(torch::Tensor img, int blurSize){
     assert(img.device().type() == torch::kCUDA);
     assert(img.dtype() == torch::kByte);
     
@@ -54,8 +54,6 @@ torch::Tensor gaussian_blur(torch::Tensor img){
     
     // auto result = torch::empty_like(img, torch::TensorOptions().dtype(torch::kByte));
     auto result = torch::empty_like(img);
-
-    const auto blurSize = 5;
 
     blur_kernel<<<dimGrid, dimBlock, 0, torch::cuda::getCurrentCUDAStream()>>>(img.data_ptr<unsigned char>(), result.data_ptr<unsigned char>(), width, height, blurSize);
     

@@ -1,3 +1,4 @@
 torch
 Ninja
 pre-commit
+gradio
