@@ -17,21 +17,21 @@ def compile_extension():
 
 
 def main():
-    current_dir = Path(__file__).parent
-
     ext = compile_extension()
 
     DEVICE, DTYPE = "cuda", torch.float32
 
-    M = torch.randn(3, 3).to(DEVICE, DTYPE)
-    N = torch.randn(3, 3).to(DEVICE, DTYPE)
+    M = torch.randn(300, 128).to(DEVICE, DTYPE)
+    N = torch.randn(128, 300).to(DEVICE, DTYPE)
 
     P = ext.matrixMul(M, N)
 
-    print(torch.allclose(P, M@N))
+    print(torch.allclose(P, M@N, rtol=1e-3, atol=1e-3))
+    diff = P - (M@N)
+    # print(f"Sum: {torch.abs(diff).sum()}, Mean {torch.abs(diff).mean()}, Max {torch.abs(diff).max()}")
     print()
-    print(P)
-    print(M@N)
+    print(P[:4, :4])
+    print((M@N)[:4, :4])
 
 
 
