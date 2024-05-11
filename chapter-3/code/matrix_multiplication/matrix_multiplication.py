@@ -21,17 +21,17 @@ def main():
 
     DEVICE, DTYPE = "cuda", torch.float32
 
-    M = torch.randn(300, 128).to(DEVICE, DTYPE)
-    N = torch.randn(128, 300).to(DEVICE, DTYPE)
+    M = torch.randn(1000, 256).to(DEVICE, DTYPE)
+    N = torch.randn(256, 123).to(DEVICE, DTYPE)
 
     P = ext.matrixMul(M, N)
 
-    print(torch.allclose(P, M@N, rtol=1e-3, atol=1e-3))
-    diff = P - (M@N)
-    # print(f"Sum: {torch.abs(diff).sum()}, Mean {torch.abs(diff).mean()}, Max {torch.abs(diff).max()}")
+    torch_P = torch.matmul(M, N)
+
+    print(torch.allclose(P, torch_P, rtol=1e-3, atol=1e-3))
     print()
     print(P[:4, :4])
-    print((M@N)[:4, :4])
+    print(torch_P[:4, :4])
 
 
 
