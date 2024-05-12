@@ -22,6 +22,22 @@ Placeholder
 ### Exercise 2
 A matrix-vector multiplication takes an input matrix B and a vector C and produces one output vector A. Each element of the output vector A is the dot product of one row of the input matrix B and C, that is, $ \(A[i] = \sum_{j} B[i][j] * C[j]\) $. For simplicity we will handle only square matrices whose elements are single-precision floating-point numbers. Write a matrix-vector multiplication kernel and the host stub function that can be called with four parameters: pointer to the output matrix, pointer to the input matrix, pointer to the input vector, and the number of elements in each dimension. Use one thread to calculate an output vector element.
 
+Full solution can by found in [matrix_vector_multiplication](code/matrix_vector_multiplication)
+
+```cu
+1  __global__
+2  void matrixVecMulKernel(float* B, float* c, float* result, int vector_size, int matrix_rows){
+3      int i = blockIdx.x * blockDim.x + threadIdx.x;
+4      if (i < matrix_rows){
+5          float sum = 0;
+6          for (int j=0; j < vector_size; ++j){
+7              sum += B[i * vector_size + j] * c[j];
+8          }
+9          result[i] = sum;
+10     }
+11 }
+```
+
 
 
 ### Exercise 3
@@ -57,26 +73,7 @@ To answer this we need to figure out the number of blocks and multiply it by the
 As indicated by variable `bd` it is `32 x 16 = 512`.
 
 **d. What is the number of threads that execute the code on line 05?**
-To answer this we need to consider the total number of threads (`25,600`), and exclude the threads that will not be executed cause of line 04 `if (row < M && col < N) {`. 
 
-To calculate the max row number `row = blockIdx.y * blockDim.y + threadIdx.y;` `threadIdx.y`,
-
-`blockIdx.y` goes from 0 to 15 (see `bd.y`), 
-`blockDim.y` is `(N - 1) / 32 + 1 = 5` (see **a**)
-`threadIdx.y` goes from 0 to 5 (see above). 
-
-So the max is `15 x 5 + 5` = `80`, `M= 300` so all of the blocks here can be processed. 
-
-`blockIdx.x` goes from 0 to 31 (see `bd.x`), 
-`blockDim.x` is `(M - 1) / 32 + 1 = 19` (see **a**)
-`threadIdx.x` goes from 0 to 19 (see above). 
-
-So the max is `31 x 19 + 19 = 608`, `N = 150`, so i don't fucking know ...
-
-
-As indicated by `gd` `blockDim.y` can go from 0 up to to `(N - 1) / 32 + 1 = 5` (see **a**), `blockIdx.y` go from 0 all the way up to `15` (see `bd.y`, remember that in cuda the order is inversed z, y, x). And the `threadIdx.y`
-
-The max row, as indicated by variable `bd`, is `16`. 
 
 ### Exercise 4
 Consider a 2D matrix with a width of 400 and a height of 500. The matrix is stored as a one-dimensional array. Specify the array index of the matrix element at row 20 and column 10:
