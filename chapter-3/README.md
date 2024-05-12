@@ -74,6 +74,14 @@ As indicated by variable `bd` it is `32 x 16 = 512`.
 
 **d. What is the number of threads that execute the code on line 05?**
 
+To answer this question we need to know: `M`, the max `row` possible, the max `N` and the max `col` possible.
+
+- `M` is 300
+- max `row` is `blockIdx.y * blockDim.y + threadIdx.y;`. `blockIdx.y` max is 9 (0 - 9, see **3a**), `blockDim.y` is 32 ergo the max `threadIdx.y` is 32 as well. So `9 x 32 + 31 = 319`     
+- `N` is 150
+- max `col` is `blockIdx.x * blockDim.x + threadIdx.x`. `blockIdx.x` max is 4 (0-4, see **3a**), `blockDim.x` is 16 ergo the max `threadIdx.x` is 16 as well. So `4 x 16 + 15 = 79`.
+
+So the total number of threads executed will be `min(300, 319) x min(150, 79) = 300 x 96 = 23,700` - so less than the total number of threads. 
 
 ### Exercise 4
 Consider a 2D matrix with a width of 400 and a height of 500. The matrix is stored as a one-dimensional array. Specify the array index of the matrix element at row 20 and column 10:
