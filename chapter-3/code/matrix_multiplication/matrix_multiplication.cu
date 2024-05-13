@@ -24,7 +24,6 @@ inline unsigned int cdiv(unsigned int a, unsigned int b) {
 
 
 torch::Tensor matrixMul(torch::Tensor M, torch::Tensor N){
-    //for now we only support the square matrices
     assert(M.device().type() == torch::kCUDA && N.device().type() == torch::kCUDA);
     assert(M.dtype() == torch::kFloat32 && N.dtype() == torch::kFloat32);
     assert(M.size(1) == N.size(0));

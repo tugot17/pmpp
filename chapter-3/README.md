@@ -22,7 +22,7 @@ Placeholder
 ### Exercise 2
 A matrix-vector multiplication takes an input matrix B and a vector C and produces one output vector A. Each element of the output vector A is the dot product of one row of the input matrix B and C, that is, $ \(A[i] = \sum_{j} B[i][j] * C[j]\) $. For simplicity we will handle only square matrices whose elements are single-precision floating-point numbers. Write a matrix-vector multiplication kernel and the host stub function that can be called with four parameters: pointer to the output matrix, pointer to the input matrix, pointer to the input vector, and the number of elements in each dimension. Use one thread to calculate an output vector element.
 
-Full solution can by found in [matrix_vector_multiplication](code/matrix_vector_multiplication)
+Full solution can by found in [exercise_2](code/exercise_2)
 
 ```cu
 1  __global__
