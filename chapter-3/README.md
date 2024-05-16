@@ -1,4 +1,26 @@
-# Exercises
+# Chapter 3.
+
+In chapter 3 we learned about multidimensional data grids, and we wrote the first more complicated kernels. 
+
+## Code
+
+For a sake of simplicity we provide the most of the code with a Python interface to interract with. You run the python script which under the hood uses the cuda kernel. We reimplemented the kenrels from the chapter as well as implemented kernels for the exercises one and two.
+
+We implement:
+
+- Matrix multiplication, with a kernel operating on the column level and the row level.
+- Matrix vector multiplication kernel.
+- Matrix multiplication kernel. 
+- RGB to grayscale kernel. 
+- Gaussian blur kernel.
+
+For gaussian blur we provide a little Gradio app, so you can visualize the effect of the kernel. To use it run:
+
+```bash
+python gaussian_blur/gradio_visualization.py
+```
+
+## Exercises
 
 ### Exercise 1
 In this chapter we implemented a matrix multiplication kernel that has each thread produce one output matrix element. In this question, you will implement different matrix-matrix multiplication kernels and compare them.
