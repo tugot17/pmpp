@@ -26,20 +26,29 @@ python gaussian_blur/gradio_visualization.py
 In this chapter we implemented a matrix multiplication kernel that has each thread produce one output matrix element. In this question, you will implement different matrix-matrix multiplication kernels and compare them.
 
 **a.** Write a kernel that has each thread produce one output matrix row. Fill in the execution configuration parameters for the design.
-<details>
-Placeholder
-</details>
+```cu
+1.  __global__
+2.  void matrixMulRowKernel(float* M, float* N, float* P, int size){
+3.      int row = blockIdx.x * blockDim.x + threadIdx.x;
+4.      if (row < size){
+5.          //do this for every element in the row:
+6.          for (int col=0; col<size; ++col){
+7.              float sum = 0;
+8.              for (int j=0; j<size; ++j){
+9.                  sum += M[row * size + j] * N[j * size + col];
+10.             }
+11.             P[row * size + col] = sum;
+12.         }
+13.     }
+14. }
+```
 
 
 **b.** Write a kernel that has each thread produce one output matrix column. Fill in the execution configuration parameters for the design.
-<details>
-Placeholder
-</details>
+
 
 **c.** Analyze the pros and cons of each of the two kernel designs.
-<details>
-Placeholder
-</details>
+
 
 ### Exercise 2
 A matrix-vector multiplication takes an input matrix B and a vector C and produces one output vector A. Each element of the output vector A is the dot product of one row of the input matrix B and C, that is, $ \(A[i] = \sum_{j} B[i][j] * C[j]\) $. For simplicity we will handle only square matrices whose elements are single-precision floating-point numbers. Write a matrix-vector multiplication kernel and the host stub function that can be called with four parameters: pointer to the output matrix, pointer to the input matrix, pointer to the input vector, and the number of elements in each dimension. Use one thread to calculate an output vector element.
@@ -77,18 +86,21 @@ Consider the following CUDA kernel and the corresponding host function that call
 09     unsigned int N = 150;
 10     unsigned int M = 300;
 11     dim3 bd(16, 32);
-12     dim3 gd((N - 1) / 32 + 1, (M - 1) / 32 + 1);
+12     dim3 gd((N - 1) / 32 + 1, (M - 1) / 32 + 1); //TODO
 13     foo_kernel <<< grid, blockDim >>> (b_d, a, M, N);
 14 }
 ```
 
 **a. What is the number of threads per block?**
 
-The number of threads per block can be inferred from the variable `gd` (gridDim). It is `((N - 1) / 32 + 1, (M - 1) / 32 + 1)`, where `N=1500` and `M=300`. Hence `((150 - 1) / 32 + 1, (300 - 1) / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> (the integer division) `(149 / 32 + 1, 299 / 32 + 1)` -> `4 + 1, 9+1` -> `5, 10`, so the number of threads per block is `5 x 10 = 50`
+T
+
+WRONG
+<!-- The number of threads per block can be inferred from the variable `gd` (gridDim). It is `((N - 1) / 32 + 1, (M - 1) / 32 + 1)`, where `N=1500` and `M=300`. Hence `((150 - 1) / 32 + 1, (300 - 1) / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> (the integer division) `(149 / 32 + 1, 299 / 32 + 1)` -> `4 + 1, 9+1` -> `5, 10`, so the number of threads per block is `5 x 10 = 50` -->
 
 **b. What is the number of threads in the grid?**
-
-To answer this we need to figure out the number of blocks and multiply it by the number of threads per block (470, see **a**). The number of blocks can be inferred from variable `bd` (blockDim). `(32 x 16) x 50 = 25,600`, so the total number of threads is `25,600`. 
+WRONG
+<!-- To answer this we need to figure out the number of blocks and multiply it by the number of threads per block (470, see **a**). The number of blocks can be inferred from variable `bd` (blockDim). `(32 x 16) x 50 = 25,600`, so the total number of threads is `25,600`.  -->
 
 **c What is the number of blocks in the grid?**
 
