@@ -4,7 +4,7 @@ import torch
 
 
 def compile_extension():
-    cuda_source = (Path(__file__).parent / "matrix_multiplication.cu").read_text()
+    cuda_source = (Path(__file__).parent / "matrix_multiplication_row_and_col.cu").read_text()
     cpp_source = "torch::Tensor matrixRowMul(torch::Tensor M, torch::Tensor N);"
 
     return load_inline(

@@ -8,15 +8,31 @@ void matrixMulRowKernel(float* M, float* N, float* P, int size){
     //assuming a square matrix
     if (row < size){
         //do this for every element in the row:
-        for (int i=0; i<size; ++i){
+        for (int col=0; col<size; ++col){
             float sum = 0;
             for (int j=0; j<size; ++j){
-                sum += M[row * size + j] * N[j * size + row];
+                sum += M[row * size + j] * N[j * size + col];
             }
-            P[row * size + i] = sum;
+            P[row * size + col] = sum;
         }
     }
 }
+
+// void matrixMulColKernel(float* M, float* N, float* P, int size){
+//     int col = blockIdx.x * blockDim.x + threadIdx.x;
+//     //assuming a square matrix
+//     if (col < size){
+//         //do this for every element in the row:
+//         for (int row=0; row<size; ++row){
+//             float sum = 0;
+//             for (int j=0; j<size; ++j){
+//                 sum += M[row * size + j] * N[j * size + col];
+//             }
+//             P[row * size + col] = sum;
+//         }
+//     }
+// }
+
 
 inline unsigned int cdiv(unsigned int a, unsigned int b) {
   return (a + b - 1) / b;
