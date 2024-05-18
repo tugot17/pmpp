@@ -44,11 +44,8 @@ python vecMul.py
 
 **Solution:**
   
-<details>
-  
 **C** it would be `i = blockIdx.x * blockDim.x + threadIdx.x` We need all three of these, we need `blockIdx.x` to identify the block and the `blockDim.x` to identify how big each block is. Each of the blocks has the same length (e.g. 256). So assuming we want to run the kernel for the 128th element of block in block one we would assign i to `1 * 256 + 128 = 384`
 
-</details>
 
 ### Exercise 2
 **Question:** Assume that we want to use each thread to calculate two adjacent elements of a vector addition. What would be the expression for mapping the thread/block indices to the data index (i) of the first element to be processed by a thread?
@@ -61,11 +58,8 @@ python vecMul.py
 
 **Solution:**
 
-<details>
-
 **C** We want each kernel to process two adjacent elements. E.g. (0, 1), (1, 2) , ..., (1024, 1025). To do this, we need an equation that will skip every second element. The one that works here is `i = (blockIdx.x * blockDim.x + threadIdx.x) * 2` for `blockIdx=0` and `threadIdx.x=0` the first element is 0, for `threadIdx.x=1` it is 2 for `blockIdx=4` and `threadIdx.x=0` it is 1024 (assuming blocks of 256). Note that for `threadIdx.x > 128` it will jump to the next block automatically. 
   
-</details>
 
 ### Exercise 3
 **Question:** We want to use each thread to calculate two elements of a vector addition. Each thread block processes 2 * blockDim.x consecutive elements that form two sections. All threads in each block will process a section first, each processing one element. They will then all move to the next section, each processing one element. What would be the correct expression for the data index (i)? processing one element. Assume that variable i should be the index for the first element to be processed by a thread. What would be the expression for mapping the thread/block indices to data index of the first element?
@@ -78,11 +72,7 @@ python vecMul.py
 
 **Solution:**
 
-<details>
 **D** We want each block to process $ 2 \times BLOCKSIZE$ elements. Assuming the block size is 256, this would mean that the block 0 will process elements from 0 to 511 . 0 to 255 from the first section and 256 to 511 in section two. So the example indices processed by a thread will be $(0, 256), (1, 257) \dots (255, 511)$. For the block 1 will need to skip the 256 to 511. To do so we need to double the portion of the thread id indicated by the block size, hence the `i=blockIdx.x*blockDim.x*2 + threadIdx.x`
-</details>
-
-
 
 
 ### Exercise 4
@@ -105,12 +95,7 @@ python vecMul.py
 
 **Solution:**
 
-<details>
-
 **C**. Each block has 1024 threads, we need to have 8 thread blocks to process 8000 th elements. Meaning there will be `8 * 1024 = 8192` threads.  
-
-</details>
-
 
 
 ### Exercise 5
@@ -131,11 +116,7 @@ python vecMul.py
 
 **Solution:**
 
-<details>
-
 **D**. cudaMalloc function takes two arguments, address of a pointer and the size in bytes. Since we want to allocate `v x int_size` bytes the answer D makes sense. 
-
-</details>
 
 
 
@@ -159,12 +140,7 @@ python vecMul.py
 
 **Solution:**
 
-<details>
-
 ** D **. The first argument of the `cudaMalloc` function is a point3r to a pointer. Since `A_d` is a pointer the address `&A_d` is an address of a pointer. `cudaMallock` takes type void as a first argument, therefore we need to cast the pointer to the right type
-
-</details>
-
 
 
 ### Exercise 7
@@ -187,12 +163,7 @@ python vecMul.py
 
 **Solution:**
 
-<details>
-
 **C** `A_d` is the destination, `A_h` is the source, the size is 3000 and the direction of transfer is from `host` to `device`. Therefore the answer is C.
-
-</details>
-
 
 
 ### Exercise 8
@@ -215,11 +186,8 @@ python vecMul.py
 
 **Solution:**
 
-<details>
-
 **C** The correct type of cuda errors is cudaError_t so the answer is C. 
 
-</details>
 
 ### Exercise 9
 
