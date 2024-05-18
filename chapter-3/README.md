@@ -1,24 +1,26 @@
 # Chapter 3.
 
-In chapter 3 we learned about multidimensional data grids, and we wrote the first more complicated kernels. 
+In chapter 3, we learned about multidimensional data grids, and we wrote the first more complicated kernels. 
 
 ## Code
 
-For a sake of simplicity we provide the most of the code with a Python interface to interract with. You run the python script which under the hood uses the cuda kernel. We reimplemented the kenrels from the chapter as well as implemented kernels for the exercises one and two.
+For the sake of simplicity, we provide most of the code with a Python interface to interact with. You run the Python script, which, under the hood, uses the Cuda kernel. We reimplemented the kernels from the chapter as well as implemented kernels for exercises one and two.
 
 We implement:
 
 - Matrix multiplication, with a kernel operating on the column level and the row level.
 - Matrix vector multiplication kernel.
-- Matrix multiplication kernel. 
-- RGB to grayscale kernel. 
+- Matrix multiplication kernel. 
+- RGB to grayscale kernel. 
 - Gaussian blur kernel.
 
-For gaussian blur we provide a little Gradio app, so you can visualize the effect of the kernel. To use it run:
+For gaussian blur, we provide a little Gradio app, so you can visualize the effect of the kernel. To use it, run:
 
 ```bash
 python gaussian_blur/gradio_visualization.py
 ```
+
+<img src="gradio.png" alt="Gradio Interface" width="1000"/>
 
 ## Exercises
 
@@ -48,6 +50,7 @@ Full solution can by found in [exercise_1](code/exercise_1)
 
 
 **b.** Write a kernel that has each thread produce one output matrix column. Fill in the execution configuration parameters for the design.
+```cu
 1. __global__
 2. void matrixMulColKernel(float* M, float* N, float* P, int size){
 3.     int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -62,6 +65,7 @@ Full solution can by found in [exercise_1](code/exercise_1)
 12.        }
 13.    }
 14.}
+```
 
 
 **c.** Analyze the pros and cons of each of the two kernel designs.
@@ -69,7 +73,7 @@ They both designers should work similarly, both are quite inefficient making a p
 
 
 ### Exercise 2
-A matrix-vector multiplication takes an input matrix B and a vector C and produces one output vector A. Each element of the output vector A is the dot product of one row of the input matrix B and C, that is, $ \(A[i] = \sum_{j} B[i][j] * C[j]\) $. For simplicity we will handle only square matrices whose elements are single-precision floating-point numbers. Write a matrix-vector multiplication kernel and the host stub function that can be called with four parameters: pointer to the output matrix, pointer to the input matrix, pointer to the input vector, and the number of elements in each dimension. Use one thread to calculate an output vector element.
+A matrix-vector multiplication takes an input matrix B and a vector C and produces one output vector A. Each element of the output vector A is the dot product of one row of the input matrix B and C, that is, `(A[i] = sum_over_j(B[i][j] * C[j])`. For simplicity we will handle only square matrices whose elements are single-precision floating-point numbers. Write a matrix-vector multiplication kernel and the host stub function that can be called with four parameters: pointer to the output matrix, pointer to the input matrix, pointer to the input vector, and the number of elements in each dimension. Use one thread to calculate an output vector element.
 
 Full solution can by found in [exercise_2](code/exercise_2)
 
@@ -92,7 +96,7 @@ Full solution can by found in [exercise_2](code/exercise_2)
 ### Exercise 3
 Consider the following CUDA kernel and the corresponding host function that calls it:
 
-```c
+```cu
 01 __global__ void foo_kernel(float* a, float* b, unsigned int M, unsigned int N) {
 02     unsigned int row = blockIdx.y * blockDim.y + threadIdx.y;
 03     unsigned int col = blockIdx.x * blockDim.x + threadIdx.x;
