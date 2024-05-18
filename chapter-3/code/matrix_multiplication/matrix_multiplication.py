@@ -1,6 +1,7 @@
 from pathlib import Path
-from torch.utils.cpp_extension import load_inline
+
 import torch
+from torch.utils.cpp_extension import load_inline
 
 
 def compile_extension():
@@ -32,7 +33,6 @@ def main():
     print()
     print(P[:4, :4])
     print(torch_P[:4, :4])
-
 
 
 if __name__ == "__main__":

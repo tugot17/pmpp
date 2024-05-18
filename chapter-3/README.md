@@ -70,7 +70,7 @@ Full solution can by found in [exercise_1](code/exercise_1)
 
 **c.** Analyze the pros and cons of each of the two kernel designs.
 
-They both designers should work similarly, both are quite inefficient making a pretty poor usage of multicore approiach. If we were to design the kernels for non-square matrices the row order approach would be more inefficient if the num of columns far exceeded the num rows (lot of looping) and the vice verse for colum order
+They both designers should work similarly, both are quite inefficient making a pretty poor usage of multicore approiach. If we were to design the kernels for non-square matrices the row order approach would be more inefficient if the num of columns far exceeded the num rows (lot of looping) and the vice verse for column order.
 
 
 ### Exercise 2
@@ -136,7 +136,7 @@ To answer this question we need to know: `M`, the max `row` possible, the max `N
 - `N` is 300
 - max `col` is `blockIdx.x * blockDim.x + threadIdx.x`. Max `blockIdx.x` max is 18 (0-18, see **3c**), `blockDim.x` is 16, ergo the max `threadIdx.x` is 15 as well. So `18 x 16 + 15 = 303`.
 
-So the total number of threads executed will be `min(150, 159) x min(300, 303) = 150 x 300 = 45,000` - so slighly less than the total number of threads (`48,640`). 
+So the total number of threads executed will be `min(150, 159) x min(300, 303) = 150 x 300 = 45,000` - so slightly less than the total number of threads (`48,640`). 
 
 ### Exercise 4
 Consider a 2D matrix with a width of 400 and a height of 500. The matrix is stored as a one-dimensional array. Specify the array index of the matrix element at row 20 and column 10:

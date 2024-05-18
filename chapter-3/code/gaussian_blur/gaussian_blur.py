@@ -36,7 +36,7 @@ def main():
     print("Input image:", y.shape, y.dtype)
 
     save_path = current_dir / "output.png"
-    print(f"Blured the image. It is saved at {save_path}")
+    print(f"Blurred the image. It is saved at {save_path}")
     write_png(y.cpu(), save_path)
 
 

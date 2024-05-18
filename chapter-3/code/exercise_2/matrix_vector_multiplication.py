@@ -1,11 +1,16 @@
 from pathlib import Path
-from torch.utils.cpp_extension import load_inline
+
 import torch
+from torch.utils.cpp_extension import load_inline
 
 
 def compile_extension():
-    cuda_source = (Path(__file__).parent / "matrix_vector_multiplication.cu").read_text()
-    cpp_source = "torch::Tensor matrix_vector_multiplication(torch::Tensor B, torch::Tensor c);"
+    cuda_source = (
+        Path(__file__).parent / "matrix_vector_multiplication.cu"
+    ).read_text()
+    cpp_source = (
+        "torch::Tensor matrix_vector_multiplication(torch::Tensor B, torch::Tensor c);"
+    )
 
     return load_inline(
         name="matrixMul_extension",
@@ -34,7 +39,6 @@ def main():
     print()
     print(res[:4])
     print(torch_res[:4])
-
 
 
 if __name__ == "__main__":
