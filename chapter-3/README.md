@@ -69,6 +69,7 @@ Full solution can by found in [exercise_1](code/exercise_1)
 
 
 **c.** Analyze the pros and cons of each of the two kernel designs.
+
 They both designers should work similarly, both are quite inefficient making a pretty poor usage of multicore approiach. If we were to design the kernels for non-square matrices the row order approach would be more inefficient if the num of columns far exceeded the num rows (lot of looping) and the vice verse for colum order
 
 
