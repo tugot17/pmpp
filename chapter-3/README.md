@@ -25,6 +25,9 @@ python gaussian_blur/gradio_visualization.py
 ### Exercise 1
 In this chapter we implemented a matrix multiplication kernel that has each thread produce one output matrix element. In this question, you will implement different matrix-matrix multiplication kernels and compare them.
 
+
+Full solution can by found in [exercise_1](code/exercise_1)
+
 **a.** Write a kernel that has each thread produce one output matrix row. Fill in the execution configuration parameters for the design.
 ```cu
 1.  __global__
@@ -45,9 +48,24 @@ In this chapter we implemented a matrix multiplication kernel that has each thre
 
 
 **b.** Write a kernel that has each thread produce one output matrix column. Fill in the execution configuration parameters for the design.
+1. __global__
+2. void matrixMulColKernel(float* M, float* N, float* P, int size){
+3.     int col = blockIdx.x * blockDim.x + threadIdx.x;
+4.     if (col < size){
+5.         // do this for every element in the row:
+6.         for (int row = 0; row < size; ++row){
+7.             float sum = 0;
+8.             for (int j = 0; j < size; ++j){
+9.                 sum += M[row * size + j] * N[j * size + col];
+10.            }
+11.            P[row * size + col] = sum;
+12.        }
+13.    }
+14.}
 
 
 **c.** Analyze the pros and cons of each of the two kernel designs.
+They both designers should work similarly, both are quite inefficient making a pretty poor usage of multicore approiach. If we were to design the kernels for non-square matrices the row order approach would be more inefficient if the num of columns far exceeded the num rows (lot of looping) and the vice verse for colum order
 
 
 ### Exercise 2
@@ -79,43 +97,41 @@ Consider the following CUDA kernel and the corresponding host function that call
 02     unsigned int row = blockIdx.y * blockDim.y + threadIdx.y;
 03     unsigned int col = blockIdx.x * blockDim.x + threadIdx.x;
 04     if (row < M && col < N) {
-05         b[row*N + col] = a[row*N + col]*2.1f + 4.8f;
+05         b[row*N + col] = a[row*N + col]/2.1f + 4.8f;
 06     }
 07 }
-08 void foo(float* a, float* b_d) {
-09     unsigned int N = 150;
-10     unsigned int M = 300;
+08 void foo(float* a_d, float* b_d) {
+09     unsigned int M = 150;
+10     unsigned int N = 300;
 11     dim3 bd(16, 32);
-12     dim3 gd((N - 1) / 32 + 1, (M - 1) / 32 + 1); //TODO
-13     foo_kernel <<< grid, blockDim >>> (b_d, a, M, N);
+12     dim3 gd((N - 1) / 16 + 1, ((M - 1) / 32 + 1));
+13     foo_kernel <<< gd, bd >>> (a_d, b_d, M, N);
 14 }
 ```
 
 **a. What is the number of threads per block?**
 
-T
+The number of threads in a single block can be inferred from the variable `bd` (blockDim), it is `16 x 32 = 512` threads. 
 
-WRONG
-<!-- The number of threads per block can be inferred from the variable `gd` (gridDim). It is `((N - 1) / 32 + 1, (M - 1) / 32 + 1)`, where `N=1500` and `M=300`. Hence `((150 - 1) / 32 + 1, (300 - 1) / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> `(149 / 32 + 1, 299 / 32 + 1)` -> (the integer division) `(149 / 32 + 1, 299 / 32 + 1)` -> `4 + 1, 9+1` -> `5, 10`, so the number of threads per block is `5 x 10 = 50` -->
 
 **b. What is the number of threads in the grid?**
-WRONG
-<!-- To answer this we need to figure out the number of blocks and multiply it by the number of threads per block (470, see **a**). The number of blocks can be inferred from variable `bd` (blockDim). `(32 x 16) x 50 = 25,600`, so the total number of threads is `25,600`.  -->
+
+Total number of threads in the grid is `Number of blocks in the grid×Number of threads per block` so in this case `512 x 95 = 48,640` (see  **3a** and **3c**).
 
 **c What is the number of blocks in the grid?**
 
-As indicated by variable `bd` it is `32 x 16 = 512`.
+The number of blocks in a grid can be inferred from the variable `gd` (gridDim). It is `((N - 1) / 16 + 1, ((M - 1) / 32 + 1));` where `M=150` and `N=300`. Hence `((300-1)/16 + 1, (150-1)/32 + 1)` -> `(299/16 + 1, 149/32 + 1)` -> `(18  + 1, 4  + 1)` -> `(19, 5)` -> `19 x 5 = 95` blocks. 
 
 **d. What is the number of threads that execute the code on line 05?**
 
 To answer this question we need to know: `M`, the max `row` possible, the max `N` and the max `col` possible.
 
-- `M` is 300
-- max `row` is `blockIdx.y * blockDim.y + threadIdx.y;`. `blockIdx.y` max is 9 (0 - 9, see **3a**), `blockDim.y` is 32 ergo the max `threadIdx.y` is 32 as well. So `9 x 32 + 31 = 319`     
-- `N` is 150
-- max `col` is `blockIdx.x * blockDim.x + threadIdx.x`. `blockIdx.x` max is 4 (0-4, see **3a**), `blockDim.x` is 16 ergo the max `threadIdx.x` is 16 as well. So `4 x 16 + 15 = 79`.
+- `M` is 150
+- max `row` is `blockIdx.y * blockDim.y + threadIdx.y;`. Max `blockIdx.y` is 4 (0-4, see **3c**), `blockDim.y` is 32, ergo the max `threadIdx.y` is 31. So `4 x 32 + 31 = 159`     
+- `N` is 300
+- max `col` is `blockIdx.x * blockDim.x + threadIdx.x`. Max `blockIdx.x` max is 18 (0-18, see **3c**), `blockDim.x` is 16, ergo the max `threadIdx.x` is 15 as well. So `18 x 16 + 15 = 303`.
 
-So the total number of threads executed will be `min(300, 319) x min(150, 79) = 300 x 96 = 23,700` - so less than the total number of threads. 
+So the total number of threads executed will be `min(150, 159) x min(300, 303) = 150 x 300 = 45,000` - so slighly less than the total number of threads (`48,640`). 
 
 ### Exercise 4
 Consider a 2D matrix with a width of 400 and a height of 500. The matrix is stored as a one-dimensional array. Specify the array index of the matrix element at row 20 and column 10:
