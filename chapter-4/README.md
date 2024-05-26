@@ -3,8 +3,6 @@
 ## Code
 
 
-
-
 ## Exercises
 
 
@@ -33,13 +31,20 @@ Consider the following CUDA kernel and the corresponding host function that call
 
 **a.** What is the number of warps per block?
 
+Each warp is 32 threads, there are 128 threads in each blok (second argument in `<<...>>`, so there is a `128/8=4` warps in each blok. 
+
 **b.** What is the number of warps in the grid?
+
+There are `(N + 128 - 1)/128 = (1024+128-1) = 8` blocks in total, each blok having 4 warps (see a), therefore there is 32 warps in the grid. 
 
 **c.** For the statement on line 04:
 
 **i.** How many warps in the grid are active?
+There are 32 warps in total. Each warp covering 32 consecutive threads, the warp covering the threads 64 to 95 will be inactive. So 1 warp per block, 8 warps in total (see b). 
 
 **ii.** How many warps in the grid are divergent?
+
+
 
 **iii.** What is the SIMD efficiency (in %) of warp 0 of block 0?
 
