@@ -40,15 +40,14 @@ There are `(N + 128 - 1)/128 = (1024+128-1) = 8` blocks in total, each blok havi
 **c.** For the statement on line 04:
 
 **i.** How many warps in the grid are active?
-There are 32 warps in total. Each warp covering 32 consecutive threads, the warp covering the threads 64 to 95 will be inactive. So 1 warp per block, 8 warps in total (see b). 
 
 **ii.** How many warps in the grid are divergent?
 
-
-
 **iii.** What is the SIMD efficiency (in %) of warp 0 of block 0?
+There are 32 threads in the 
 
 **iv.** What is the SIMD efficiency (in %) of warp 1 of block 0?
+Warp 1 is covering threads `[32,63]. Threads 40 
 
 **v.** What is the SIMD efficiency (in %) of warp 3 of block 0?
 
