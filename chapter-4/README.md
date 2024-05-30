@@ -70,14 +70,29 @@ Warp 3 is covering threads 96-127. Threads `96-103` are inactive while threads 1
   Every second thread in the grid is active, meaning, half of the threads in every single warp will be active, meaning all 32 warps are active. 
 
   **ii. How many warps in the grid are divergent?**
+All of the warps in the grid are divergent. So 32 divergent warps. 
 
   **iii. What is the SIMD efficiency (in %) of warp 0 of block 0?**
+Half of the threads in a warp are active so the SIMD efficiency is `16/32=0.5=50%`
 
 **e. For the loop on line 09:**
 
+`i` ranges from 0 to 1023 (`8 x 128=1024` threads in the grid) . `i%3` can have 3 values `{0, 1, 2}`.  342 zeros, 341 ones and 341 twos. 
+
+  ```cu
+09     for(unsigned int j = 0; j < 5 - (i%3); ++j) 
+10         b[i] += j
+11     }
+  ```
+
+So the line 10 will be executed 5 (5-0) times in 342 cases, 4 (5-1) times in 341 cases, and 3 (5-2) times in 341 cases. 
+
   **i. How many iterations have no divergence?**
+  3 iterations will have no divergence (all 1024 threads will execute them). 
 
   **ii. How many iterations have divergence?**
+  4 iterations and 5 iterations will have thread divergence. 
+  
 
 ### Exercise 2
  For a vector addition, assume that the vector length is 2000, each thread calculates one output element, and the thread block size is 512 threads. How many threads will be in the grid?
