@@ -16,7 +16,7 @@ Consider the following CUDA kernel and the corresponding host function that call
 03     if(threadIdx.x < 40 || threadIdx.x >= 104) {
 04         b[i] = a[i] + 1;
 05     }
-06     if(i&2 == 0) {
+06     if(i%2 == 0) {
 07         a[i] = b[i]*2;
 08     }
 09     for(unsigned int j = 0; j < 5 - (i%3); ++j) {
@@ -29,41 +29,55 @@ Consider the following CUDA kernel and the corresponding host function that call
 16 }
 ```
 
-**a.** What is the number of warps per block?
+**a. What is the number of warps per block?**
 
 Each warp is 32 threads, there are 128 threads in each blok (second argument in `<<...>>`, so there is a `128/8=4` warps in each blok. 
 
-**b.** What is the number of warps in the grid?
+**b. What is the number of warps in the grid?**
 
 There are `(N + 128 - 1)/128 = (1024+128-1) = 8` blocks in total, each blok having 4 warps (see a), therefore there is 32 warps in the grid. 
 
-**c.** For the statement on line 04:
+**c. For the statement on line 04:**
 
-**i.** How many warps in the grid are active?
+**i. How many warps in the grid are active?**
 
-**ii.** How many warps in the grid are divergent?
+The first warp (warp 0) is executing threads 0 to 31 all of them are running (`threadIdx.x < 40`) so the warp is active.
+The second warp (warp 1) is executing the threads 32-63. Since some of them are active (`threadIdx.x < 40`) cause of the CUDA Single-instruction-muliple-threads all of the threds in the warp will run, some will just be inactive. 
+The third warp (warp 2) is executing threads 64-95, since none of them satisfies the if condition (`threadIdx.x < 40 || threadIdx.x >= 104`) all of the threads are skipped so the warp is inactive. 
+The forth warp (warp 3) is executing threads 96 to 128 so, simillary to the second warp some of the threads (`threadIdx.x >= 104`) are active meaning the warp will run.
 
-**iii.** What is the SIMD efficiency (in %) of warp 0 of block 0?
-There are 32 threads in the 
+So 3 warps per block are active, bringing it to total of `3x8` warps in the grid. 
 
-**iv.** What is the SIMD efficiency (in %) of warp 1 of block 0?
-Warp 1 is covering threads `[32,63]. Threads 40 
+**ii. How many warps in the grid are divergent?**
 
-**v.** What is the SIMD efficiency (in %) of warp 3 of block 0?
+As above warp 1 and warp and warp 3 are divergent (only some of the threads in the warp are active) so there is a total of two divergent warps. 
 
-**d.** For the statement on line 07:
+**iii. What is the SIMD efficiency (in %) of warp 0 of block 0?**
 
-  i. How many warps in the grid are active?
+There are 32 threads in the warp (0 to 31), all of them are being executed, so the efficiencey is `32/32 = 100%`.
 
-  ii. How many warps in the grid are divergent?
+**iv. What is the SIMD efficiency (in %) of warp 1 of block 0?**
 
-  iii. What is the SIMD efficiency (in %) of warp 0 of block 0?
+Warp 1 is covering threads `[32,63]`. Threads `32-39` are being executed, while threads `40-63` are not (`threadIdx.x < 40`). So the SIMD  efficiency is `7/32=0,21=21%`
 
-**e.** For the loop on line 09:
+**v. What is the SIMD efficiency (in %) of warp 3 of block 0?**
 
-  i. How many iterations have no divergence?
+Warp 3 is covering threads 96-127. Threads `96-103` are inactive while threads 104-127 are being executed. So the SIMD efficiency is `23/32=0.71=71%`
 
-  ii. How many iterations have divergence?
+**d. For the statement on line 07:**
+
+  **i. How many warps in the grid are active?**
+  Every second thread in the grid is active, meaning, half of the threads in every single warp will be active, meaning all 32 warps are active. 
+
+  **ii. How many warps in the grid are divergent?**
+
+  **iii. What is the SIMD efficiency (in %) of warp 0 of block 0?**
+
+**e. For the loop on line 09:**
+
+  **i. How many iterations have no divergence?**
+
+  **ii. How many iterations have divergence?**
 
 ### Exercise 2
  For a vector addition, assume that the vector length is 2000, each thread calculates one output element, and the thread block size is 512 threads. How many threads will be in the grid?
