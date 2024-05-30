@@ -122,6 +122,24 @@ If a CUDA device’s SM can take up to 1536 threads and up to 4 thread blocks, w
    - **c.** 512 threads per block
    - **d.** 1024 threads per block
 
+To determinie which config will result in the maximum number of threads we need to consider two limitations we have:
+
+- SM supports up to 4 blocks
+- SM supports up to 1535 threads
+
+To calculate the amount of threads each config will yeild we need to:
+
+- calculate the number of blocks given the thread size, accouning for the total number of threads supported by an SM, and figure out if it is larger than the allowed one (4)
+- multiply the `min(4, number_of_thread_blocks) x the_block_size`.
+
+Let's do this for our configurations:
+
+- **a.** `min(4, 1536/128) * 128 = min(4, 12) x 128 = 4 x 128 = 512`
+- **b.** `min(4, 1536/256) * 256 = min(4, 6) x 256 = 4 x 256 = 1024`
+- **c.** `min(4, 1536/512) * 512 = min(4, 3) x 512 = 3 x 512 = 1536`
+- **d.** `min(4, 1536/1024) * 1024 = min(4, 1) x 1024 = 1 x 1024 = 1024`
+
+So the anseer is **c**. 
 
 
 ### Exercise 7
@@ -132,6 +150,14 @@ Assume a device that allows up to 64 blocks per SM and 2048 threads per SM. Indi
 **c.** 32 blocks with 32 threads each  
 **d.** 64 blocks with 32 threads each  
 **e.** 32 blocks with 64 threads each  
+
+To answer this, we need to multiply the number of blocks by the block size and verify if this is below the number of threads supported by SM. Normally, we would also need to verify if the proposed number of blocks in `<=64` allowed blocks, but in this case, all of the configurations fulfill this criteria. To calculate the occupancy, we will divide the number of threads for the configuration by the number of threads supported by the SM (`2048` in this case).
+
+- **a.** `8 x 128 = 1024`. `1024` is `<=2048`, so it is possible. The occupacy in this case is `1024/2048 = 0.5=50%`
+- **b.** `16 x 64 = 1024`. `1024` is `<=2048`, so it is possible. The occupacy in this case is `1024/2048 = 0.5=50%`
+- **c.** `32 x 32 = 1024`. `1024` is `<=2048`, so it is possible. The occupacy in this case is `1024/2048 = 0.5=50%`
+- **d.** `64 x 32 = 2048`. `2048` is `<=2048`, so it is possible. The occupacy in this case is `2048/2048 = 1.0=100%`
+- **e.** `32 x 64 = 2048`. `2048` is `<=2048`, so it is possible. The occupacy in this case is `2048/2048 = 1.0=100%`
 
 ### Exercise 8
 Consider a GPU with the following hardware limits: 2048 threads per SM, 32 blocks per SM, and 64K (65,536) registers per SM. For each of the following kernel characteristics, specify whether the kernel can achieve full occupancy. If not, specify the limiting factor.
