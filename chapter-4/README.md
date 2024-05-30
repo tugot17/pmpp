@@ -170,7 +170,7 @@ The full occupacy is achieved if the SM can utilize all 2048 threads. We have tw
 1.  The SM supports up to 32 blocks
 2.  The SM supports up to 65,536.
 
-We need to operate under these limits. 
+We need to operate under these constraints. 
 
 **a.** 
 
@@ -179,6 +179,14 @@ Maximum number of blocks based on the block size: `2048 / 128 = 16`. `16` is bel
 Number of registers per block: `128 x 30 = 3,840` registers per block. Maximum number of blocks based on the registers per block:  `65,536 / 3,840 = 17`. 17 is more than the limit impossed on us by the block size. 
 
 So the total number of threads for this setting is: `16 x 128 = 2048` threads, so we get full utilization `(2048 / 2048 = 100%)
+
+**b.** 
+Maximum number of blocks based on the block size: `2048 / 32 = 64`. 64 is above the hardware limit of 32 blocks per SM the constraint is not satisfied and we can't operate that mamy blocks. 
+
+Number of registers per block: `32 x 29 = 928`. Maximum number of blocks based on the registers per block:  `65,536 / 928 = 70`. The SM limitation is 32 blocks per SM we can't operate that many.
+
+So the total number of threads for this setting is `32 x 32 =1024` threads, so we get 50% `1024/2048=0.5=50%` utilization.
+
 
 
 ### Exercise 9
