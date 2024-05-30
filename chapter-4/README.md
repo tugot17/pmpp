@@ -113,12 +113,16 @@ To answer this we need to identify the thread spending most of the time in the s
 ### Exercise 5
 A CUDA programmer says that if they launch a kernel with only 32 threads in each block, they can leave out the `__syncthreads()` instruction wherever barrier synchronization is needed. Do you think this is a good idea? Explain.
 
+Since all of the threads are processed within the same warp they are executed in lock-step in the SIMD (Single Instruction, Multiple Data) manner. This means they are inherently synchronized at the instruction level so in theory this might be good enough prevention mechanism allowing us to ommit explicit usage of the `__syncthreads()` instruction. However in pracitce, e.g. when memory is involved it might not necesseirly be true. While the instructions will be executed one by one, the underlaying hardware e.g. read/write to the memory might  in pracice be a subject to delays (due to various hardware limitations). Hence in pracitce it might be safer to use the `__syncthreads()`.
+
 ### Exercise 6
 If a CUDA device’s SM can take up to 1536 threads and up to 4 thread blocks, which of the following block configurations would result in the most number of threads in the SM?
    - **a.** 128 threads per block
    - **b.** 256 threads per block
    - **c.** 512 threads per block
    - **d.** 1024 threads per block
+
+
 
 ### Exercise 7
 Assume a device that allows up to 64 blocks per SM and 2048 threads per SM. Indicate which of the following assignments per SM are possible. In the cases in which it is possible, indicate the occupancy level.
