@@ -164,7 +164,24 @@ Consider a GPU with the following hardware limits: 2048 threads per SM, 32 block
 
 **a.** The kernel uses 128 threads per block and 30 registers per thread.  
 **b.** The kernel uses 32 threads per block and 29 registers per thread.  
-**c.** The kernel uses 256 threads per block and 34 registers per thread.  
+**c.** The kernel uses 256 threads per block and 34 registers per thread. 
+
+The full occupacy is achieved if the SM can utilize all 2048 threads. We have two limitting factors: 
+1.  The SM supports up to 32 blocks
+2.  The SM supports up to 65,536.
+
+We need to operate under these limits. 
+
+**a.** 
+
+Maximum number of blocks based on the block size: `2048 / 128 = 16`. `16` is below the hardware limit of `32` blocks so this constraint is satisfied. 
+
+Number of registers per block: `128 x 30 = 3,840` registers per block. Maximum number of blocks based on the registers per block:  `65,536 / 3,840 = 17`. 17 is more than the limit impossed on us by the block size. 
+
+So the total number of threads for this setting is: `16 x 128 = 2048` threads, so we get full utilization `(2048 / 2048 = 100%)
+
 
 ### Exercise 9
 A student mentions that they were able to multiply two 1024 × 1024 matrices using a matrix multiplication kernel with 32 × 32 thread blocks. The student is using a CUDA device that allows up to 512 threads per block and up to 8 blocks per SM. The student further mentions that each thread in a thread block calculates one element of the result matrix. What would be your reaction and why?
+
+
