@@ -187,6 +187,7 @@ Number of registers per block: `32 x 29 = 928`. Maximum number of blocks based o
 
 So the total number of threads for this setting is `32 x 32 =1024` threads, so we get 50% `1024/2048=0.5=50%` utilization.
 
+The limiting factor is the nnumber of blocks supported by the GPU.
 
 
 ### Exercise 9
