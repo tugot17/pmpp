@@ -8,8 +8,7 @@
 
 ### Exercise 1
 
-Consider the following CUDA kernel and the corresponding host function that calls it:
-
+**Consider the following CUDA kernel and the corresponding host function that calls it:**
 ```cpp
 01 __global__ void foo_kernel(int* a, int* b) {
 02     unsigned int i = blockIdx.x*blockDim.x + threadIdx.x;
@@ -88,39 +87,41 @@ Half of the threads in a warp are active so the SIMD efficiency is `16/32=0.5=50
 So the line 10 will be executed 5 (5-0) times in 342 cases, 4 (5-1) times in 341 cases, and 3 (5-2) times in 341 cases. 
 
   **i. How many iterations have no divergence?**
+  
   3 iterations will have no divergence (all 1024 threads will execute them). 
 
   **ii. How many iterations have divergence?**
+  
   4 iterations and 5 iterations will have thread divergence. 
   
 
 ### Exercise 2
- For a vector addition, assume that the vector length is 2000, each thread calculates one output element, and the thread block size is 512 threads. How many threads will be in the grid?
+**For a vector addition, assume that the vector length is 2000, each thread calculates one output element, and the thread block size is 512 threads. How many threads will be in the grid?**
 
 The minimum amount of blocks of size 512 to cover 2000 elements is 4 - 2048 threads in total. 
 
 ### Exercise 3
-For the previous question, how many warps do you expect to have divergence due to the boundary check on vector length?
+**For the previous question, how many warps do you expect to have divergence due to the boundary check on vector length?**
 
 There will be `2048 / 32 = 64` warps in total. The warp covering threads `2015-2047` will be inactive (aka skipped). The warp covering threeads `1984-2015` will be divergent. The threads 1984-1999 will have data to process while the threads `2000-2015` will not. 
 
 ### Exercise 4
- Consider a hypothetical block with 8 threads executing a section of code before reaching a barrier. The threads require the following amount of time (in microseconds) to execute the sections: 2.0, 2.3, 3.0, 2.8, 2.4, 1.9, 2.6, and 2.9; they spend the rest of their time waiting for the barrier. What percentage of the threads’ total execution time is spent waiting for the barrier?
+**Consider a hypothetical block with 8 threads executing a section of code before reaching a barrier. The threads require the following amount of time (in microseconds) to execute the sections: 2.0, 2.3, 3.0, 2.8, 2.4, 1.9, 2.6, and 2.9; they spend the rest of their time waiting for the barrier. What percentage of the threads’ total execution time is spent waiting for the barrier?**
 
 To answer this we need to identify the thread spending most of the time in the section, in this case it is `3.0ms`. Than we need to caluclate the delta between the time it takes to execute the section for every thread. In this case it is `(3.0 - 2.0) + (3.0 - 2.3) + (3.0 - 3.0) + (3.0 - 2.8) + (3.0 - 2.4) + (3.0 - 1.9) + (3.0 - 2.6) = 1.0 + 0.7 + 0.0 + 0.2 + 0.6 + 1.1 + 0.4 = 4.0`. Last but not least we need to divide the delta by the total time spend in the execution `8x3.0=24.0`ms. In this case it will be `4.0/24.0=0.16=16%`, so 16% of the execution time is spend waiting for the barrier. 
 
 
 ### Exercise 5
-A CUDA programmer says that if they launch a kernel with only 32 threads in each block, they can leave out the `__syncthreads()` instruction wherever barrier synchronization is needed. Do you think this is a good idea? Explain.
+**A CUDA programmer says that if they launch a kernel with only 32 threads in each block, they can leave out the `__syncthreads()` instruction wherever barrier synchronization is needed. Do you think this is a good idea? Explain.**
 
 Since all of the threads are processed within the same warp they are executed in lock-step in the SIMD (Single Instruction, Multiple Data) manner. This means they are inherently synchronized at the instruction level so in theory this might be good enough prevention mechanism allowing us to ommit explicit usage of the `__syncthreads()` instruction. However in pracitce, e.g. when memory is involved it might not necesseirly be true. While the instructions will be executed one by one, the underlaying hardware e.g. read/write to the memory might  in pracice be a subject to delays (due to various hardware limitations). Hence in pracitce it might be safer to use the `__syncthreads()`.
 
 ### Exercise 6
 If a CUDA device’s SM can take up to 1536 threads and up to 4 thread blocks, which of the following block configurations would result in the most number of threads in the SM?
-   - **a.** 128 threads per block
-   - **b.** 256 threads per block
-   - **c.** 512 threads per block
-   - **d.** 1024 threads per block
+   - **a. 128 threads per block**
+   - **b. 256 threads per block**
+   - **c. 512 threads per block**
+   - **d. 1024 threads per block**
 
 To determinie which config will result in the maximum number of threads we need to consider two limitations we have:
 
@@ -145,11 +146,11 @@ So the anseer is **c**.
 ### Exercise 7
 **Assume a device that allows up to 64 blocks per SM and 2048 threads per SM. Indicate which of the following assignments per SM are possible. In the cases in which it is possible, indicate the occupancy level.**
 
-**a.** 8 blocks with 128 threads each  
-**b.** 16 blocks with 64 threads each  
-**c.** 32 blocks with 32 threads each  
-**d.** 64 blocks with 32 threads each  
-**e.** 32 blocks with 64 threads each  
+**a. 8 blocks with 128 threads each**  
+**b. 16 blocks with 64 threads each**  
+**c. 32 blocks with 32 threads each**  
+**d. 64 blocks with 32 threads each**  
+**e. 32 blocks with 64 threads each**  
 
 To answer this, we need to multiply the number of blocks by the block size and verify if this is below the number of threads supported by SM. Normally, we would also need to verify if the proposed number of blocks in `<=64` allowed blocks, but in this case, all of the configurations fulfill this criteria. To calculate the occupancy, we will divide the number of threads for the configuration by the number of threads supported by the SM (`2048` in this case).
 
