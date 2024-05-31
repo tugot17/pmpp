@@ -41,11 +41,14 @@ There are `(N + 128 - 1)/128 = (1024+128-1) = 8` blocks in total, each blok havi
 **i. How many warps in the grid are active?**
 
 The first warp (warp 0) is executing threads 0 to 31 all of them are running (`threadIdx.x < 40`) so the warp is active.
+
 The second warp (warp 1) is executing the threads 32-63. Since some of them are active (`threadIdx.x < 40`) cause of the CUDA Single-instruction-muliple-threads all of the threds in the warp will run, some will just be inactive. 
+
 The third warp (warp 2) is executing threads 64-95, since none of them satisfies the if condition (`threadIdx.x < 40 || threadIdx.x >= 104`) all of the threads are skipped so the warp is inactive. 
+
 The forth warp (warp 3) is executing threads 96 to 128 so, simillary to the second warp some of the threads (`threadIdx.x >= 104`) are active meaning the warp will run.
 
-So 3 warps per block are active, bringing it to total of `3x8` warps in the grid. 
+So 3 warps per block are active, bringing it to total of `3x8=24` warps in the grid. 
 
 **ii. How many warps in the grid are divergent?**
 
@@ -66,12 +69,15 @@ Warp 3 is covering threads 96-127. Threads `96-103` are inactive while threads 1
 **d. For the statement on line 07:**
 
   **i. How many warps in the grid are active?**
+
   Every second thread in the grid is active, meaning, half of the threads in every single warp will be active, meaning all 32 warps are active. 
 
   **ii. How many warps in the grid are divergent?**
+
 All of the warps in the grid are divergent. So 32 divergent warps. 
 
   **iii. What is the SIMD efficiency (in %) of warp 0 of block 0?**
+
 Half of the threads in a warp are active so the SIMD efficiency is `16/32=0.5=50%`
 
 **e. For the loop on line 09:**
@@ -117,7 +123,7 @@ To answer this we need to identify the thread spending most of the time in the s
 Since all of the threads are processed within the same warp they are executed in lock-step in the SIMD (Single Instruction, Multiple Data) manner. This means they are inherently synchronized at the instruction level so in theory this might be good enough prevention mechanism allowing us to ommit explicit usage of the `__syncthreads()` instruction. However in pracitce, e.g. when memory is involved it might not necesseirly be true. While the instructions will be executed one by one, the underlaying hardware e.g. read/write to the memory might  in pracice be a subject to delays (due to various hardware limitations). Hence in pracitce it might be safer to use the `__syncthreads()`.
 
 ### Exercise 6
-If a CUDA device’s SM can take up to 1536 threads and up to 4 thread blocks, which of the following block configurations would result in the most number of threads in the SM?
+**If a CUDA device’s SM can take up to 1536 threads and up to 4 thread blocks, which of the following block configurations would result in the most number of threads in the SM?**
    - **a. 128 threads per block**
    - **b. 256 threads per block**
    - **c. 512 threads per block**
