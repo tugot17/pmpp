@@ -52,9 +52,7 @@ So 3 warps per block are active, bringing it to total of `3x8=24` warps in the g
 
 **ii. How many warps in the grid are divergent?**
 
-FIX IT
-
-As above warp 1 and warp and warp 3 are divergent (only some of the threads in the warp are active) so there is a total of two divergent warps. 
+As above warp 1 and warp and warp 3 are divergent (only some of the threads in the warp are active) so there is a total of two divergent warps per block, `8x2=16` warps in total.  
 
 **iii. What is the SIMD efficiency (in %) of warp 0 of block 0?**
 
@@ -62,15 +60,11 @@ There are 32 threads in the warp (0 to 31), all of them are being executed, so t
 
 **iv. What is the SIMD efficiency (in %) of warp 1 of block 0?**
 
-FIX IT
-
-Warp 1 is covering threads `[32,63]`. Threads `32-39` are being executed, while threads `40-63` are not (`threadIdx.x < 40`). So the SIMD  efficiency is `7/32=0,21=21%`
+Warp 1 is covering threads `[32,63]`. Threads `32-39` are being executed, while threads `40-63` are not (`threadIdx.x < 40`). So the SIMD  efficiency is `8/32=0,25=25%`
 
 **v. What is the SIMD efficiency (in %) of warp 3 of block 0?**
 
-FIX IT
-
-Warp 3 is covering threads 96-127. Threads `96-103` are inactive while threads 104-127 are being executed. So the SIMD efficiency is `23/32=0.71=71%`
+Warp 3 is covering threads 96-127. Threads `96-103` are inactive while threads 104-127 are being executed. So the SIMD efficiency is `24/32=0.75=75%`
 
 **d. For the statement on line 07:**
 
@@ -126,7 +120,7 @@ To answer this we need to identify the thread spending most of the time in the s
 ### Exercise 5
 **A CUDA programmer says that if they launch a kernel with only 32 threads in each block, they can leave out the `__syncthreads()` instruction wherever barrier synchronization is needed. Do you think this is a good idea? Explain.**
 
-Since all of the threads are processed within the same warp they are executed in lock-step in the SIMD (Single Instruction, Multiple Data) manner. This means they are inherently synchronized at the instruction level so in theory this might be good enough prevention mechanism allowing us to ommit explicit usage of the `__syncthreads()` instruction. However in pracitce, e.g. when memory is involved it might not necesseirly be true. While the instructions will be executed one by one, the underlaying hardware e.g. read/write to the memory might  in pracice be a subject to delays (due to various hardware limitations). Hence in pracitce it might be safer to use the `__syncthreads()`.
+Since all of the threads are processed within the same warp they are executed in lock-step in the SIMD (Single Instruction, Multiple Data) manner. This means they are inherently synchronized at the instruction level so in theory this might be good enough prevention mechanism allowing us to ommit explicit usage of the `__syncthreads()` instruction. However in pracitce, e.g. when memory is involved it might not necesseirly be true. While the instructions will be executed one by one, the underlaying hardware e.g. read/write to the memory might  in pracice be a subject to delays (due to various hardware limitations). Hence in pracitce it might be safer to use the `__syncthreads()`. Moreover, Nvidia does not gaurnatee that in the future the warp size will remain to be 32, in order to build the future-proof codebase it is usually better to use `__syncthreads()`.
 
 ### Exercise 6
 **If a CUDA device’s SM can take up to 1536 threads and up to 4 thread blocks, which of the following block configurations would result in the most number of threads in the SM?**
@@ -211,8 +205,6 @@ The limiting factor is the register limit.
 ### Exercise 9
 **A student mentions that they were able to multiply two 1024 × 1024 matrices using a matrix multiplication kernel with 32 × 32 thread blocks. The student is using a CUDA device that allows up to 512 threads per block and up to 8 blocks per SM. The student further mentions that each thread in a thread block calculates one element of the result matrix. What would be your reaction and why?**
 
-FIX IT
 
-The student is using block size of `32 x 32 = 1024` threads. The SM supports only up to 512 threads, so it will not be possible to use the setting he/she has chosen, they will have to use smaller blocks. A block size of `16x16=256` threads would be fitting. This would require `1024 × 1024 / 256 = 4.096` blocks that would be distributed accross the SMs.
-
+There are `1024 x 1024 = 1.048.576` elements in the matrix. The student is using a grid with `32 x 32 = 1024` blocks, each block supporting `512 threads`. In total, there will be only `1024 x 512 = 524.288` threads in the grid. Students claim that each thread is calculating only one element of the result matrix, which is not possible based on the above configuration. The number of SM blocks per SM is irrelevant for this problem.
 
