@@ -30,11 +30,11 @@
 
 **a. What is the number of warps per block?**
 
-Each warp is 32 threads, there are 128 threads in each blok (second argument in `<<...>>`, so there is a `128/8=4` warps in each blok. 
+Each warp is 32 threads, there are 128 threads in each block (second argument in `<<...>>`), so there is a `128/8=4` warps in each block. 
 
 **b. What is the number of warps in the grid?**
 
-There are `(N + 128 - 1)/128 = (1024+128-1) = 8` blocks in total, each blok having 4 warps (see a), therefore there is 32 warps in the grid. 
+There are `(N + 128 - 1)/128 = (1024+128-1) = 8` blocks in total, each block having 4 warps (see a), therefore there is 32 warps in the grid. 
 
 **c. For the statement on line 04:**
 
@@ -42,7 +42,7 @@ There are `(N + 128 - 1)/128 = (1024+128-1) = 8` blocks in total, each blok havi
 
 The first warp (warp 0) is executing threads 0 to 31 all of them are running (`threadIdx.x < 40`) so the warp is active.
 
-The second warp (warp 1) is executing the threads 32-63. Since some of them are active (`threadIdx.x < 40`) cause of the CUDA Single-instruction-muliple-threads all of the threds in the warp will run, some will just be inactive. 
+The second warp (warp 1) is executing the threads 32-63. Since some of them are active (`threadIdx.x < 40`) cause of the CUDA Single-instruction-muliple-threads all of the threads in the warp will run, some will just be inactive. 
 
 The third warp (warp 2) is executing threads 64-95, since none of them satisfies the if condition (`threadIdx.x < 40 || threadIdx.x >= 104`) all of the threads are skipped so the warp is inactive. 
 
@@ -114,13 +114,13 @@ There will be `2048 / 32 = 64` warps in total. The warp covering threads `2015-2
 ### Exercise 4
 **Consider a hypothetical block with 8 threads executing a section of code before reaching a barrier. The threads require the following amount of time (in microseconds) to execute the sections: 2.0, 2.3, 3.0, 2.8, 2.4, 1.9, 2.6, and 2.9; they spend the rest of their time waiting for the barrier. What percentage of the threads’ total execution time is spent waiting for the barrier?**
 
-To answer this we need to identify the thread spending most of the time in the section, in this case it is `3.0ms`. Than we need to caluclate the delta between the time it takes to execute the section for every thread. In this case it is `(3.0 - 2.0) + (3.0 - 2.3) + (3.0 - 3.0) + (3.0 - 2.8) + (3.0 - 2.4) + (3.0 - 1.9) + (3.0 - 2.6) = 1.0 + 0.7 + 0.0 + 0.2 + 0.6 + 1.1 + 0.4 = 4.0`. Last but not least we need to divide the delta by the total time spend in the execution `8x3.0=24.0`ms. In this case it will be `4.0/24.0=0.16=16%`, so 16% of the execution time is spend waiting for the barrier. 
+To answer this we need to identify the thread spending most of the time in the section, in this case it is `3.0ms`. Than we need to calculate the delta between the time it takes to execute the section for every thread. In this case it is `(3.0 - 2.0) + (3.0 - 2.3) + (3.0 - 3.0) + (3.0 - 2.8) + (3.0 - 2.4) + (3.0 - 1.9) + (3.0 - 2.6) = 1.0 + 0.7 + 0.0 + 0.2 + 0.6 + 1.1 + 0.4 = 4.0`. Last but not least we need to divide the delta by the total time spend in the execution `8x3.0=24.0`ms. In this case it will be `4.0/24.0=0.16=16%`, so 16% of the execution time is spend waiting for the barrier. 
 
 
 ### Exercise 5
 **A CUDA programmer says that if they launch a kernel with only 32 threads in each block, they can leave out the `__syncthreads()` instruction wherever barrier synchronization is needed. Do you think this is a good idea? Explain.**
 
-Since all of the threads are processed within the same warp they are executed in lock-step in the SIMD (Single Instruction, Multiple Data) manner. This means they are inherently synchronized at the instruction level so in theory this might be good enough prevention mechanism allowing us to ommit explicit usage of the `__syncthreads()` instruction. However in pracitce, e.g. when memory is involved it might not necesseirly be true. While the instructions will be executed one by one, the underlaying hardware e.g. read/write to the memory might  in pracice be a subject to delays (due to various hardware limitations). Hence in pracitce it might be safer to use the `__syncthreads()`. Moreover, Nvidia does not gaurnatee that in the future the warp size will remain to be 32, in order to build the future-proof codebase it is usually better to use `__syncthreads()`.
+Since all of the threads are processed within the same warp they are executed in lock-step in the SIMD (Single Instruction, Multiple Data) manner. This means they are inherently synchronized at the instruction level so in theory this might be good enough prevention mechanism allowing us to omit explicit usage of the `__syncthreads()` instruction. However in pracitce, e.g. when memory is involved it might not necesseirly be true. While the instructions will be executed one by one, the underlying hardware e.g. read/write to the memory might  in pracice be a subject to delays (due to various hardware limitations). Hence in pracitce it might be safer to use the `__syncthreads()`. Moreover, Nvidia does not gaurnatee that in the future the warp size will remain to be 32, in order to build the future-proof codebase it is usually better to use `__syncthreads()`.
 
 ### Exercise 6
 **If a CUDA device’s SM can take up to 1536 threads and up to 4 thread blocks, which of the following block configurations would result in the most number of threads in the SM?**
@@ -134,9 +134,9 @@ To determinie which config will result in the maximum number of threads we need 
 - SM supports up to 4 blocks
 - SM supports up to 1535 threads
 
-To calculate the amount of threads each config will yeild we need to:
+To calculate the amount of threads each config will yield we need to:
 
-- calculate the number of blocks given the thread size, accouning for the total number of threads supported by an SM, and figure out if it is larger than the allowed one (4)
+- calculate the number of blocks given the thread size, accounting for the total number of threads supported by an SM, and figure out if it is larger than the allowed one (4)
 - multiply the `min(4, number_of_thread_blocks) x the_block_size`.
 
 Let's do this for our configurations:
@@ -170,7 +170,7 @@ To answer this, we need to multiply the number of blocks by the block size and v
 **Consider a GPU with the following hardware limits: 2048 threads per SM, 32 blocks per SM, and 64K (65,536) registers per SM. For each of the following kernel characteristics, specify whether the kernel can achieve full occupancy. If not, specify the limiting factor.**
 
 
-The full occupacy is achieved if the SM can utilize all 2048 threads. We have two limitting factors: 
+The full occupacy is achieved if the SM can utilize all 2048 threads. We have two limiting factors: 
 1.  The SM supports up to 32 blocks
 2.  The SM supports up to 65,536.
 
