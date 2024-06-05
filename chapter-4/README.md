@@ -52,6 +52,8 @@ So 3 warps per block are active, bringing it to total of `3x8=24` warps in the g
 
 **ii. How many warps in the grid are divergent?**
 
+FIX IT
+
 As above warp 1 and warp and warp 3 are divergent (only some of the threads in the warp are active) so there is a total of two divergent warps. 
 
 **iii. What is the SIMD efficiency (in %) of warp 0 of block 0?**
@@ -60,9 +62,13 @@ There are 32 threads in the warp (0 to 31), all of them are being executed, so t
 
 **iv. What is the SIMD efficiency (in %) of warp 1 of block 0?**
 
+FIX IT
+
 Warp 1 is covering threads `[32,63]`. Threads `32-39` are being executed, while threads `40-63` are not (`threadIdx.x < 40`). So the SIMD  efficiency is `7/32=0,21=21%`
 
 **v. What is the SIMD efficiency (in %) of warp 3 of block 0?**
+
+FIX IT
 
 Warp 3 is covering threads 96-127. Threads `96-103` are inactive while threads 104-127 are being executed. So the SIMD efficiency is `23/32=0.71=71%`
 
@@ -204,6 +210,8 @@ The limiting factor is the register limit.
 
 ### Exercise 9
 **A student mentions that they were able to multiply two 1024 × 1024 matrices using a matrix multiplication kernel with 32 × 32 thread blocks. The student is using a CUDA device that allows up to 512 threads per block and up to 8 blocks per SM. The student further mentions that each thread in a thread block calculates one element of the result matrix. What would be your reaction and why?**
+
+FIX IT
 
 The student is using block size of `32 x 32 = 1024` threads. The SM supports only up to 512 threads, so it will not be possible to use the setting he/she has chosen, they will have to use smaller blocks. A block size of `16x16=256` threads would be fitting. This would require `1024 × 1024 / 256 = 4.096` blocks that would be distributed accross the SMs.
 
