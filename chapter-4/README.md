@@ -1,7 +1,60 @@
 # Chapter 4
 
-## Exercises
+## Code
 
+In this chapter we have very little actual code. We just query the CUDA device properties. 
+
+Just run the [Makefile](code/Makefile)
+
+```bash
+cd code
+```
+
+```bash
+make
+```
+
+You should see something like this:
+
+```
+Detected 2 CUDA capable device(s)
+
+Device 0: "NVIDIA GeForce RTX 4090"
+  Major revision number:         8
+  Minor revision number:         9
+  Total amount of global memory: 23.65 GB
+  Number of multiprocessors:     128
+  Total amount of constant memory: 65536 bytes
+  Total amount of shared memory per block: 49152 bytes
+  Total number of registers available per block: 65536
+  Warp size:                     32
+  Maximum number of threads per block: 1024
+  Maximum sizes of each dimension of a block: 1024 x 1024 x 64
+  Maximum sizes of each dimension of a grid: 2147483647 x 65535 x 65535
+  Clock rate:                    2.57 GHz
+  Memory clock rate:             10501 MHz
+  Memory bus width:              384-bit
+  L2 cache size:                 75497472 bytes
+
+Device 1: "NVIDIA GeForce RTX 4090"
+  Major revision number:         8
+  Minor revision number:         9
+  Total amount of global memory: 23.65 GB
+  Number of multiprocessors:     128
+  Total amount of constant memory: 65536 bytes
+  Total amount of shared memory per block: 49152 bytes
+  Total number of registers available per block: 65536
+  Warp size:                     32
+  Maximum number of threads per block: 1024
+  Maximum sizes of each dimension of a block: 1024 x 1024 x 64
+  Maximum sizes of each dimension of a grid: 2147483647 x 65535 x 65535
+  Clock rate:                    2.57 GHz
+  Memory clock rate:             10501 MHz
+  Memory bus width:              384-bit
+  L2 cache size:                 75497472 bytes
+```
+
+## Exercises
 
 ### Exercise 1
 
