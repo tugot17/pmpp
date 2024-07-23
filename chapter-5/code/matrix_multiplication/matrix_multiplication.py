@@ -6,15 +6,36 @@ from torch.utils.cpp_extension import load_inline
 
 def compile_extension():
     cuda_source = (Path(__file__).parent / "matrix_multiplication.cu").read_text()
-    cpp_source = "torch::Tensor maiveMatrixMul(torch::Tensor M, torch::Tensor N);"
+    cpp_source = "torch::Tensor tiledSquareMatrixMul(torch::Tensor M, torch::Tensor N);"
 
     return load_inline(
         name="matrixMul_extension",
         cpp_sources=cpp_source,
         cuda_sources=cuda_source,
-        functions=["maiveMatrixMul"],
+        functions=["tiledSquareMatrixMul"],
         with_cuda=True,
     )
+
+import sys
+import io
+
+def capture_cuda_output(func):
+    def wrapper(*args, **kwargs):
+        # Redirect stdout to capture CUDA output
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        
+        try:
+            result = func(*args, **kwargs)
+            cuda_output = sys.stdout.getvalue()
+            print("CUDA Kernel Output:")
+            print(cuda_output)
+        finally:
+            # Restore stdout
+            sys.stdout = old_stdout
+        
+        return result
+    return wrapper
 
 
 def main():
@@ -22,10 +43,10 @@ def main():
 
     DEVICE, DTYPE = "cuda", torch.float32
 
-    M = torch.randn(1000, 256).to(DEVICE, DTYPE)
-    N = torch.randn(256, 123).to(DEVICE, DTYPE)
+    M = torch.randn(16, 15).to(DEVICE, DTYPE)
+    N = torch.randn(128, 128).to(DEVICE, DTYPE)
 
-    P = ext.maiveMatrixMul(M, N)
+    P = ext.tiledSquareMatrixMul(M, N)
 
     torch_P = torch.matmul(M, N)
 
