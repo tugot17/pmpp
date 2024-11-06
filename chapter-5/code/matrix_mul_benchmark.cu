@@ -1,11 +1,10 @@
+// nvcc -o matrix_mul matrix_mul_benchmark.cu
+
 #include <iostream>
 #include <cuda_runtime.h>
 #include <cmath>
-#include <iomanip> // For std::setw to align output
-
+#include <iomanip>
 #define TILE_WIDTH 32
-
-using namespace std;
 
 __global__ void MatrixMulKernel(float *M, float *N, float *P, int m, int n, int o)
 {
@@ -42,9 +41,17 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int width)
     float PValue = 0;
     for (int ph = 0; ph < width / TILE_WIDTH; ph++)
     {
-        Mds[ty][tx] = M[row * width + ph * TILE_WIDTH + tx];   // row + phase + right row in a phase
-        Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * width + col]; // col is from ty + phase + actuall col in the phase
-        __syncthreads();                                       // make sure everything is loaded to both tile matrices
+        if (row < width && ph * TILE_WIDTH < width)
+            Mds[ty][tx] = M[row * width + ph * TILE_WIDTH + tx]; // row + phase + right row in a phase
+        else
+            Mds[ty][tx] = 0.0f;
+
+        if ((ph * TILE_WIDTH + ty) < width && col < width)
+            Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * width + col]; // col is from ty + phase + actuall col in the phase
+        else
+            Nds[ty][tx] = 0.0f;
+
+        __syncthreads(); // make sure everything is loaded to both tile matrices
 
         for (int k = 0; k < TILE_WIDTH; k++)
         {
@@ -67,7 +74,7 @@ void matrixMul(float *M, float *N, float *P, int m, int n, int o)
     cudaMemcpy(d_M, M, m * n * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_N, N, n * o * sizeof(float), cudaMemcpyHostToDevice);
 
-    dim3 dimBlock(16, 16);
+    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH);
     dim3 dimGrid((o + dimBlock.x - 1) / dimBlock.x, (m + dimBlock.y - 1) / dimBlock.y);
 
     MatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, m, n, o);
@@ -164,7 +171,7 @@ void printMatrix(float *matrix, int rows, int cols)
 
 int main()
 {
-    int size = 8192;
+    int size = 1000;
     int m = size, n = size, o = size;
 
     float *M = new float[m * n];

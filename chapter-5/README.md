@@ -1,4 +1,26 @@
-# Chapter 5 Exercise Questions
+# Chapter 5
+
+## Code
+
+In this chapter we implmented the tiled matrix multiplication algorithm. To run the experiments just execute:
+
+```bash
+cd code
+nvcc -o matrix_mul matrix_mul_benchmark.cu
+./matrix_mul
+```
+
+We run a bunch of speed comparision benchmarks as well as safety check for numerical parity. 
+
+
+```bash
+Average time for matrixMulTiling: 53.6356 ms
+Average time for matrixMul: 57.2734 ms
+Outputs are approximately the same
+```
+
+
+## Exercises
 
 **1. Consider matrix addition. Can one use shared memory to reduce the global memory bandwidth consumption? Hint: Analyze the elements that are accessed by each thread and see whether there is any commonality between threads.**
 
