@@ -4,7 +4,20 @@
 #include <cuda_runtime.h>
 #include <cmath>
 #include <iomanip>
-#define TILE_WIDTH 32
+#define TILE_WIDTH 16
+
+__device__ void printDeviceMatrix(float *matrix, int width, int height)
+{
+    for (int i = 0; i < height; i++)
+    {
+        for (int j = 0; j < width; j++)
+        {
+            printf("%f ", matrix[i * width + j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
 
 __global__ void MatrixMulKernel(float *M, float *N, float *P, int m, int n, int o)
 {
@@ -22,7 +35,7 @@ __global__ void MatrixMulKernel(float *M, float *N, float *P, int m, int n, int 
     }
 }
 
-__global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int width)
+__global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n, int o)
 {
 
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
@@ -39,15 +52,15 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int width)
     int col = bx * TILE_WIDTH + tx;
 
     float PValue = 0;
-    for (int ph = 0; ph < width / TILE_WIDTH; ph++)
+    for (int ph = 0; ph < (n + TILE_WIDTH - 1) / TILE_WIDTH; ph++)
     {
-        if (row < width && ph * TILE_WIDTH < width)
-            Mds[ty][tx] = M[row * width + ph * TILE_WIDTH + tx]; // row + phase + right row in a phase
+        if (row < m && (ph * TILE_WIDTH + tx) < n)
+            Mds[ty][tx] = M[row * n + ph * TILE_WIDTH + tx]; // row + phase + right row in a phase
         else
             Mds[ty][tx] = 0.0f;
 
-        if ((ph * TILE_WIDTH + ty) < width && col < width)
-            Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * width + col]; // col is from ty + phase + actuall col in the phase
+        if ((ph * TILE_WIDTH + ty) < n && (col < o))
+            Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * o + col]; // col is from ty + phase + actuall col in the phase
         else
             Nds[ty][tx] = 0.0f;
 
@@ -60,7 +73,7 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int width)
         __syncthreads(); // make sure we update this for every thread and we can start overwriting
     }
 
-    P[row * width + col] = PValue;
+    P[row * o + col] = PValue;
 }
 
 void matrixMul(float *M, float *N, float *P, int m, int n, int o)
@@ -91,7 +104,7 @@ void matrixMulTiling(float *M, float *N, float *P, int m, int n, int o)
     float *d_M, *d_N, *d_P;
 
     // for now we work just with the square matrices
-    int width = m;
+    // int width = m;
 
     cudaMalloc((void **)&d_M, m * n * sizeof(float));
     cudaMalloc((void **)&d_N, n * o * sizeof(float));
@@ -103,7 +116,7 @@ void matrixMulTiling(float *M, float *N, float *P, int m, int n, int o)
     dim3 dimBlock(TILE_WIDTH, TILE_WIDTH);
     dim3 dimGrid((o + dimBlock.x - 1) / dimBlock.x, (m + dimBlock.y - 1) / dimBlock.y);
 
-    TiledMatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, width);
+    TiledMatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, m, n, o);
 
     cudaMemcpy(P, d_P, m * o * sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -171,8 +184,8 @@ void printMatrix(float *matrix, int rows, int cols)
 
 int main()
 {
-    int size = 1000;
-    int m = size, n = size, o = size;
+    // change these to experiment with sizes, here I get a substantial boost just via using TILING
+    int m = 4000, n = 6000, o = 8000;
 
     float *M = new float[m * n];
     float *N = new float[n * o];
@@ -194,14 +207,14 @@ int main()
     bool same = allclose(P1, P2, m, o);
     std::cout << "Outputs are " << (same ? "approximately the same" : "different") << std::endl;
 
-    if (false && !same)
-    {
-        std::cout << "\nMatrix P1 (from matrixMulTiling):" << std::endl;
-        printMatrix(P1, m, o);
+    // if (true && !same)
+    // {
+    //     std::cout << "\nMatrix P1 (from matrixMulTiling):" << std::endl;
+    //     printMatrix(P1, m, o);
 
-        std::cout << "\nMatrix P2 (from matrixMul):" << std::endl;
-        printMatrix(P2, m, o);
-    }
+    //     std::cout << "\nMatrix P2 (from matrixMul):" << std::endl;
+    //     printMatrix(P2, m, o);
+    // }
 
     delete[] M;
     delete[] N;
