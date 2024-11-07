@@ -1,16 +1,64 @@
-// nvcc -o matrix_mul matrix_mul_benchmark.cu
+// nvcc -o matrix_mul_dynamic_tile matrix_mul_with_optimal_dynamic_tile_size.cu
+// here we make the tile dynamic, the tile size is calculated based on the hardware specyfication not hardcodedd as before
 
 #include <iostream>
 #include <cuda_runtime.h>
 #include <cmath>
 #include <iomanip>
-#define TILE_WIDTH 64
+#include <cuda_runtime.h>
+#include <cstdio>
+#include <cmath>
+#include <iostream>
 
-__device__ void printDeviceMatrix(float *matrix, int width, int height)
+int calculateOptimalTileWidth(int m, int n, int o)
 {
-    for (int i = 0; i < height; i++)
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+
+    // Get hardware limits
+    int maxThreadsPerBlock = prop.maxThreadsPerBlock;
+    int maxBlockDimX = prop.maxThreadsDim[0];
+    int maxBlockDimY = prop.maxThreadsDim[1];
+    int sharedMemPerBlock = prop.sharedMemPerBlock;
+
+    // Calculate maximum possible tile size based on hardware constraints
+
+    // 1. Based on max threads per block (square tiles)
+    int tileWidth = static_cast<int>(sqrt(maxThreadsPerBlock));
+
+    // 2. Based on max block dimensions
+    tileWidth = std::min(tileWidth, std::min(maxBlockDimX, maxBlockDimY));
+
+    // 3. Based on shared memory (we need 2 tiles worth of shared memory)
+    int maxTileWidthBySharedMem = static_cast<int>(sqrt(sharedMemPerBlock / (2 * sizeof(float))));
+    tileWidth = std::min(tileWidth, maxTileWidthBySharedMem);
+
+    // 4. Based on matrix dimensions (no point in having tiles larger than matrices)
+    tileWidth = std::min(tileWidth, std::min(m, std::min(n, o)));
+
+    // 5. Round down to nearest power of 2 for better memory alignment
+    tileWidth = 1 << static_cast<int>(log2(tileWidth));
+
+    // 6. Ensure minimum practical size
+    tileWidth = std::max(16, tileWidth); // minimum tile size of 16
+
+    // Print diagnostic information
+    // std::cout << "Calculated optimal tile width: " << tileWidth << std::endl;
+    // std::cout << "Based on:" << std::endl;
+    // std::cout << "- Max threads per block: " << maxThreadsPerBlock << std::endl;
+    // std::cout << "- Max block dimensions: " << maxBlockDimX << "x" << maxBlockDimY << std::endl;
+    // std::cout << "- Shared memory per block: " << sharedMemPerBlock << " bytes" << std::endl;
+    // std::cout << "- Matrix dimensions: " << m << "x" << n << "x" << o << std::endl;
+
+    return tileWidth;
+}
+
+__device__ void printDeviceMatrix(float *matrix, int width, int height, const char *matrixName)
+{
+    printf("%s:\n", matrixName);
+    for (int i = 0; i < height; ++i)
     {
-        for (int j = 0; j < width; j++)
+        for (int j = 0; j < width; ++j)
         {
             printf("%f ", matrix[i * width + j]);
         }
@@ -35,11 +83,12 @@ __global__ void MatrixMulKernel(float *M, float *N, float *P, int m, int n, int 
     }
 }
 
-__global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n, int o)
+__global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n, int o, int tileWidth)
 {
-
-    __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
-    __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
+    extern __shared__ float sharedMem[];
+    // Split shared memory into two parts, one for Mds and one for Nds
+    float *Mds = sharedMem;
+    float *Nds = &sharedMem[tileWidth * tileWidth];
 
     // let's save these for convinience
     int by = blockIdx.y;
@@ -48,27 +97,27 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n,
     int tx = threadIdx.x;
 
     // we use this to identify the current P element
-    int row = by * TILE_WIDTH + ty;
-    int col = bx * TILE_WIDTH + tx;
+    int row = by * tileWidth + ty;
+    int col = bx * tileWidth + tx;
 
-    float PValue = 0;
-    for (int ph = 0; ph < (n + TILE_WIDTH - 1) / TILE_WIDTH; ph++)
+    float PValue = 0.0;
+    for (int ph = 0; ph < (n + tileWidth - 1) / tileWidth; ph++)
     {
-        if (row < m && (ph * TILE_WIDTH + tx) < n)
-            Mds[ty][tx] = M[row * n + ph * TILE_WIDTH + tx]; // row + phase + right row in a phase
+        if (row < m && (ph * tileWidth + tx) < n)
+            Mds[ty * tileWidth + tx] = M[row * n + ph * tileWidth + tx]; // row + phase + right row in a phase
         else
-            Mds[ty][tx] = 0.0f;
+            Mds[ty * tileWidth + tx] = 0.0f;
 
-        if ((ph * TILE_WIDTH + ty) < n && (col < o))
-            Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * o + col]; // col is from ty + phase + actuall col in the phase
+        if ((ph * tileWidth + ty) < n && (col < o))
+            Nds[ty * tileWidth + tx] = N[(ph * tileWidth + ty) * o + col]; // col is from ty + phase + actuall col in the phase
         else
-            Nds[ty][tx] = 0.0f;
+            Nds[ty * tileWidth + tx] = 0.0f;
 
         __syncthreads(); // make sure everything is loaded to both tile matrices
 
-        for (int k = 0; k < TILE_WIDTH; k++)
+        for (int k = 0; k < tileWidth; k++)
         {
-            PValue += Mds[ty][k] * Nds[k][tx];
+            PValue += Mds[ty * tileWidth + k] * Nds[k * tileWidth + tx];
         }
         __syncthreads(); // make sure we update this for every thread and we can start overwriting
     }
@@ -88,7 +137,7 @@ void matrixMul(float *M, float *N, float *P, int m, int n, int o)
     cudaMemcpy(d_M, M, m * n * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_N, N, n * o * sizeof(float), cudaMemcpyHostToDevice);
 
-    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH);
+    dim3 dimBlock(16, 16);
     dim3 dimGrid((o + dimBlock.x - 1) / dimBlock.x, (m + dimBlock.y - 1) / dimBlock.y);
 
     MatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, m, n, o);
@@ -103,6 +152,11 @@ void matrixMul(float *M, float *N, float *P, int m, int n, int o)
 void matrixMulTiling(float *M, float *N, float *P, int m, int n, int o)
 {
     float *d_M, *d_N, *d_P;
+    // int tileWidth = calculateOptimalTileWidth();
+    int tileWidth = calculateOptimalTileWidth(m, n, o);
+
+    // for now we work just with the square matrices
+    // int width = m;
 
     cudaMalloc((void **)&d_M, m * n * sizeof(float));
     cudaMalloc((void **)&d_N, n * o * sizeof(float));
@@ -111,10 +165,11 @@ void matrixMulTiling(float *M, float *N, float *P, int m, int n, int o)
     cudaMemcpy(d_M, M, m * n * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_N, N, n * o * sizeof(float), cudaMemcpyHostToDevice);
 
-    dim3 dimBlock(TILE_WIDTH, TILE_WIDTH);
+    dim3 dimBlock(tileWidth, tileWidth);
     dim3 dimGrid((o + dimBlock.x - 1) / dimBlock.x, (m + dimBlock.y - 1) / dimBlock.y);
 
-    TiledMatrixMulKernel<<<dimGrid, dimBlock>>>(d_M, d_N, d_P, m, n, o);
+    int sharedMemSize = 2 * tileWidth * tileWidth * sizeof(float);
+    TiledMatrixMulKernel<<<dimGrid, dimBlock, sharedMemSize>>>(d_M, d_N, d_P, m, n, o, tileWidth);
 
     cudaMemcpy(P, d_P, m * o * sizeof(float), cudaMemcpyDeviceToHost);
 
@@ -183,7 +238,7 @@ void printMatrix(float *matrix, int rows, int cols)
 int main()
 {
     // change these to experiment with sizes, here I get a substantial boost just via using TILING
-    int m = 1271, n = 1771, o = 1831;
+    int m = 2010, n = 3200, o = 9111;
 
     float *M = new float[m * n];
     float *N = new float[n * o];
@@ -205,14 +260,14 @@ int main()
     bool same = allclose(P1, P2, m, o);
     std::cout << "Outputs are " << (same ? "approximately the same" : "different") << std::endl;
 
-    // if (true && !same)
-    // {
-    //     std::cout << "\nMatrix P1 (from matrixMulTiling):" << std::endl;
-    //     printMatrix(P1, m, o);
+    if (true && !same)
+    {
+        std::cout << "\nMatrix P1 (from matrixMulTiling):" << std::endl;
+        printMatrix(P1, m, o);
 
-    //     std::cout << "\nMatrix P2 (from matrixMul):" << std::endl;
-    //     printMatrix(P2, m, o);
-    // }
+        std::cout << "\nMatrix P2 (from matrixMul):" << std::endl;
+        printMatrix(P2, m, o);
+    }
 
     delete[] M;
     delete[] N;
