@@ -183,7 +183,7 @@ void printMatrix(float *matrix, int rows, int cols)
 int main()
 {
     // change these to experiment with sizes, here I get a substantial boost just via using TILING
-    int m = 1271, n = 1771, o = 1831;
+    int m = 1271, n = 8771, o = 1831;
 
     float *M = new float[m * n];
     float *N = new float[n * o];
