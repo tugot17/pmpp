@@ -2,7 +2,7 @@
 
 ## Code
 
-In this chapter, we implemented the tiled matrix multiplication algorithm. To run the experiments, just execute:
+In this chapter we implmented the tiled matrix multiplication algorithm. To run the experiments just execute:
 
 ```bash
 cd code
@@ -10,7 +10,7 @@ nvcc -o matrix_mul matrix_mul_benchmark.cu
 ./matrix_mul
 ```
 
-We run a bunch of speed comparison benchmarks as well as a safety check for numerical parity. 
+We run a bunch of speed comparision benchmarks as well as safety check for numerical parity. 
 
 
 ```bash
@@ -18,8 +18,6 @@ Average time for matrixMulTiling: 53.6356 ms
 Average time for matrixMul: 57.2734 ms
 Outputs are approximately the same
 ```
-
-We also implemented the version with dynamic calculation of the tile size based on the hardware specification. It can be found in `matrix_mul_with_optimal_dynamic_tile_size.cu`.
 
 
 ## Exercises
@@ -96,14 +94,14 @@ For the tiled case, we do a single load from global memory, store the value in t
 
 Our device can do at most 200 GFlops or 2*10^2 * 10^9 operations per second. As per kernel specification, we have 36 floating-point operations in our kernel, meaning that our kernel can be executed 200/36 * 10^9 = 5.55 * 10^9 times within a second. 
 
-Our memory can provide `100x10^9` bytes in a second. Assuming that our kernel needs to access 7 32-bit (4-byte) values from the global memory, this would mean we can execute it `100x10^9/(7x4) = 3.57x10^9` times. Based on these limits, we see that the memory limit is much more severe, meaning that the kernel is memory-bound in this case.
+Our memory can provide 100*10^9 bytes in a second. Assuming that our kernel needs to access 7 32-bit (4-byte) values from the global memory, this would mean we can execute it 100 * 10^9 / (7*4) = 3.57 * 10^9 times. Based on these limits, we see that the memory limit is much more severe, meaning that the kernel is memory-bound in this case.
 
 
 **b. Peak FLOPS=300 GFLOPS, peak memory bandwidth=250 GB/second**
 
-Our device can do at most 300 GFlops or `300x10^9` operations per second. As per kernel specification, we have 36 floating-point operations in our kernel, meaning that our kernel can be executed `300/36x10^9 = 8,33x10^9` times within a second. 
+Our device can do at most 300 GFlops or 2*10^2 * 10^9 operations per second. As per kernel specification, we have 36 floating-point operations in our kernel, meaning that our kernel can be executed 300/36 * 10^9 = 8,33 * 10^9 times within a second. 
 
-Our memory can provide `10x10^9` bytes in a second, assuming that our kernel needs to access seven 32-bit values from the global memory. This would mean we can execute it `200x10^9 / (7x4) = 7,14 x 10^9` times.
+Our memory can provide 10* 10^9 bytes in a second, assuming that our kernel needs to access seven 32-bit values from the global memory. This would mean we can execute it 200 * 10^9 / (7*4) = 7,14 * 10^9 times.
 Based on these limits, we see that the compute limit is much more severe, meaning that the kernel is compute bound in this case.
 
 ### Exercise 10
@@ -228,8 +226,8 @@ So the ratio is 7 operations per 5 loads. Since each of the loaded variables is 
 
 **a. The kernel uses 64 threads/block, 27 registers/thread, and 4 KB of shared memory/SM.**
 
-The SM supports up to 32 blocks per SM, each block running `64` threads. This brings us up to `32x64=2048` threads in total. Each thread uses 27 registers, so `2048 x 27 = 55296` registers are used—less than our upper bound of 64k registers. The kernel is using 4 KB of shared memory per block; this would bring us to a total of `32x4=128` KB of shared memory. Since we have 96KB total, we won't be able to run so many bocks. At most we will be able to only run 24 blocks, achieving `24x64/2048=0.75=75%` occupancy with the shared memory being the limitting factor. 
+The SM supports up to 32 blocks per SM, each block running `64` threads. This brings us up to `32x64=2048` threads in total. Each thread uses 27 registers, so `2048 x 27 = 55296` registers used—less than our upper bound of 64k registers. The kernel is using 4 KB of shared memory per block; this would bring us to a total of `32x4=128` KB of shared memory. Since we have 96KB total, we won't be able to run so many bocks. At most we will be able to only run 24 blocks, achieving `24x64/2048=0.75=75%` occupancy with the shared memory being the limitting factor. 
 
 **b. The kernel uses 256 threads/block, 31 registers/thread, and 8 KB of shared memory/SM.**
 
-The kernel is using the 256 threads per block, meaning we can have up to `2048/256=8` blocks max. With this configuration, we run `8x256=2048` threads in total. Each thread will use 64 registers, bringing us to the total of `2048x31=63488` registers in total, slightly below our register upper bound. The kernel is using 8 KB per block, and since we have 8 blocks, we will be using `8 x 8 KB = 64 KB` memory total, considerably below our memory limit. This means that we can run 2048 threeads and that we will achieve a 100% occupancy rate. 
+The kernel is using the 256 threads per block, meadning we can have up to `2048/256=8` blocks max. With this configuration we run `8x256=2048` threads in total. Each thread will use 64 registers, bringing us to the total of `2048x31=63488` registers in total, slightly below our register upper bound. The kernel is using 8Kb per block, and since we have 8 blocks we will be using `8 x 8Kb = 64Kb` memory total, considerably below our memory limit. This mean that we can run 2048 threeads and that we will achieve 100% occupacy rate. 

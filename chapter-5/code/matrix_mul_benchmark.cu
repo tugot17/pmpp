@@ -122,7 +122,7 @@ void matrixMulTiling(float *M, float *N, float *P, int m, int n, int o)
     cudaFree(d_N);
     cudaFree(d_P);
 }
-
+    
 float benchmark(void (*func)(float *, float *, float *, int, int, int),
                 float *M, float *N, float *P, int m, int n, int o,
                 int warmup = 25, int reps = 100)
