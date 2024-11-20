@@ -1,5 +1,38 @@
 *.pyc
 
+# CUDA compiled files
+*.cu.o
+*.cu.obj
+*.cubin
+*.fatbin
+*.ptx
+*.cu.deps
+*.cu.cache
+
+# NVCC compilation intermediates
+*.cudafe*
+*.module_id
+*.cpp*.ii
+*.hash
+*.o.tmp
+*.i.tmp
+
+# CUDA specific build outputs
+*.pdb
+*.exp
+*.nvvp
+*.sass
+*.cub
+
+# Visual Studio CUDA specific
+*.tlog
+*.lastbuildstate
+*.idb
+*.pdb
+ipch/
+*.sdf
+*.opensdf
+
 # Object files
 *.o
 *.ko
