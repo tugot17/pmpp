@@ -4,19 +4,29 @@
 #include <cuda_runtime.h>
 #include <cmath>
 #include <iomanip>
-#define TILE_WIDTH 64
+#define TILE_WIDTH 32
 
-__device__ void printDeviceMatrix(float *matrix, int width, int height)
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
-    for (int i = 0; i < height; i++)
-    {
-        for (int j = 0; j < width; j++)
-        {
-            printf("%f ", matrix[i * width + j]);
-        }
-        printf("\n");
+   if (code != cudaSuccess)
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
+void clear_l2() {
+    // Get actual L2 size via CUDA on first call of this function
+    static int l2_clear_size = 0;
+    static unsigned char* gpu_scratch_l2_clear = NULL;
+    if (!gpu_scratch_l2_clear) {
+        cudaDeviceGetAttribute(&l2_clear_size, cudaDevAttrL2CacheSize, 0);
+        l2_clear_size *= 2; // just to be extra safe (cache is not necessarily strict LRU)
+        gpuErrchk(cudaMalloc(&gpu_scratch_l2_clear, l2_clear_size));
     }
-    printf("\n");
+    // Clear L2 cache (this is run on every call unlike the above code)
+    gpuErrchk(cudaMemset(gpu_scratch_l2_clear, 0, l2_clear_size));
 }
 
 __global__ void MatrixMulKernel(float *M, float *N, float *P, int m, int n, int o)
@@ -41,7 +51,6 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n,
     __shared__ float Mds[TILE_WIDTH][TILE_WIDTH];
     __shared__ float Nds[TILE_WIDTH][TILE_WIDTH];
 
-    // let's save these for convinience
     int by = blockIdx.y;
     int bx = blockIdx.x;
     int ty = threadIdx.y;
@@ -127,36 +136,35 @@ float benchmark(void (*func)(float *, float *, float *, int, int, int),
                 float *M, float *N, float *P, int m, int n, int o,
                 int warmup = 25, int reps = 100)
 {
-    // Warmup
     for (int i = 0; i < warmup; ++i)
     {
         func(M, N, P, m, n, o);
     }
 
-    // Timing with CUDA events
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
+    cudaEvent_t iterStart, iterStop;
+    cudaEventCreate(&iterStart);
+    cudaEventCreate(&iterStop);
 
-    // Start timing
-    cudaEventRecord(start);
+    float totalTime_ms = 0.0f;
+
     for (int i = 0; i < reps; ++i)
     {
+        cudaEventRecord(iterStart);
         func(M, N, P, m, n, o);
+        cudaEventRecord(iterStop);
+        cudaEventSynchronize(iterStop);
+
+        float iterTime = 0.0f;
+        cudaEventElapsedTime(&iterTime, iterStart, iterStop);
+        totalTime_ms += iterTime;
+
+        clear_l2();    
     }
-    // Stop timing
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
 
-    float milliseconds = 0;
-    cudaEventElapsedTime(&milliseconds, start, stop);
+    cudaEventDestroy(iterStart);
+    cudaEventDestroy(iterStop);
 
-    // Cleanup
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-
-    // Return the average time per run
-    return milliseconds / reps;
+    return totalTime_ms / reps;
 }
 
 bool allclose(float *M, float *N, int m, int n, float tol = 1e-5)
@@ -183,7 +191,7 @@ void printMatrix(float *matrix, int rows, int cols)
 int main()
 {
     // change these to experiment with sizes, here I get a substantial boost just via using TILING
-    int m = 1271, n = 8771, o = 1831;
+    int m = 4096, n = 4096, o = 4096;
 
     float *M = new float[m * n];
     float *N = new float[n * o];
@@ -204,15 +212,6 @@ int main()
 
     bool same = allclose(P1, P2, m, o);
     std::cout << "Outputs are " << (same ? "approximately the same" : "different") << std::endl;
-
-    // if (true && !same)
-    // {
-    //     std::cout << "\nMatrix P1 (from matrixMulTiling):" << std::endl;
-    //     printMatrix(P1, m, o);
-
-    //     std::cout << "\nMatrix P2 (from matrixMul):" << std::endl;
-    //     printMatrix(P2, m, o);
-    // }
 
     delete[] M;
     delete[] N;
