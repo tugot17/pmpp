@@ -87,55 +87,62 @@ Coalesced access requires that all of the threads in the warp access the neighbo
 `a[blockIdx.x*blockDim.x + threadIdx.x]` the neighbouring threads within a block will access the neighbouring memory cells (subsequent `threadIdx.x`) - so coalased access. 
 
 - **b. The access to array a_s of line 05**
-`a_s` is a shared memory so it does not require coalasing. 
+`a_s` is a shared memory, so it does not require coalescing. 
 
 - **c. The access to array b of line 07**
-
-`b[j*blockDim.x*gridDim.x + blockIdx.x*blockDim.x + threadIdx.x;]` for neighbouring threads withn a block only the `threadIdx.x` changesm so all threads in the block access the neighbouring memory cells - coalased. 
+`b[j*blockDim.x*gridDim.x + blockIdx.x*blockDim.x + threadIdx.x;]`For neighbouring threads within a block, only the `threadIdx.x` changes, so all threads in the block access the neighbouring memory cells—coalesced.
 
 - **d. The access to array c of line 07**
-`c[(blockIdx.x*blockDim.x + threadIdx.x)*4 + j]` - jump of 4 cells beteen the neighbouring cells - uncoalesced access. 
+`c[(blockIdx.x*blockDim.x + threadIdx.x)*4 + j]` - jump of 4 cells between the neighboring cells—uncoalesced access. 
 
 - **e. The access to array bc_s of line 07**
-`bc_s` is a shard memory, therefore the concept of coaleasing does not apply here. 
+`bc_s` is a shared memory, therefore the concept of coalescing does not apply here. 
 
 - **f. The access to array a_s of line 10**
-`a_s` is a shard memory, therefore the concept of coaleasing does not apply here. 
+`a_s` is a shared memory, therefore the concept of coalescing does not apply here. 
 
 - **g. The access to array d of line 10**
-`d[blockIdx.x*blockDim.x + threadIdx.x + 8]` - based on `threadIdx.x` neighbouring threads in the warp access neighbouring cells - coalased memory access.
+`d[blockIdx.x*blockDim.x + threadIdx.x + 8]` - based on `threadIdx.x`, neighbouring threads in the warp access neighbouring cells—coalesced memory access.
 
 - **h. The access to array bc_s of line 11**
-`bc_s[threadIdx.x*4]` - `bc_s` is a shard memory, therefore the concept of coaleasing does not apply here. 
+`bc_s[threadIdx.x*4]` - `bc_s` is a shared memory, therefore the concept of coalescing does not apply here. 
 
 - **i. The access to array e of line 11**
-`e[(blockIdx.x*blockDim.x + threadIdx.x)*8]` - for neighbouring threads does a jump by 8 cells - no coaleasing.
+`e[(blockIdx.x*blockDim.x + threadIdx.x)*8]` - for neighbouring threads, it does a jump by 8 cells—no coalescing.
 
 ### Exercise 4
 
 **What is the floating point to global memory access ratio (in OP/B) of each of the following matrix-matrix multiplication kernels?**
 
-Let's assume we have matrix `M` of size `(m, n)` and a matrix N of size `(n, o)`. We assume `float32`, so 4 bytes, as a data type. 
+Let's assume we have a matrix `M` of size `(m, n)` and a matrix N of size `(n, o)`. We assume `float32`, so 4 bytes, as a data type. 
 
 **a. The simple kernel described in Chapter 3, Multidimensional Grids and Data, without any optimizations applied.**
 
-In the simple kernel we, for each element of the result matrix we:
-- Loaded an entrire row of the inpt matrix `M`, so `n` memory loads
-- Load an entrie row of the input matrix N, so `n` memory loads. 
+In the simple kernel, we, for each element of the result matrix, we:
+- Loaded an entire row of the input matrix `M`, so `n` memory loads
+- Load an entire row of the input matrix N, so `n` memory loads. 
 - Multiply each of the elements from the fow so `n` operations.
-- Add all of the results to each other for go get the final number, so `n-1` or aproximately `n` operations. 
+- Add all of the results to each other to get the final number, so `n-1` or approximately `n` operations. 
 
 In total `2n` memory loads and `2n` operations, so `4bytes` so `2n operations / (4bytes x 2n)=0.25 operations/B`.
 
 **b. The kernel described in Chapter 5, Memory Architecture and Data Locality, with shared memory tiling applied using a tile size of 32 × 32.**
 
-In the kernel with tiling we still have a single thread for each of the elements of the output matrix, but now we have somehow reduced the amount of work to be done. Now we:
-- Each thread loads only `n/TILE_SIZE` or `n/32` values from the gobal memory, the other consequitve 31 values are loaded by the consequive threads in the warp. Note that the `TILE_SIZE` is exactly of the size of a warp, so all of the memory access is coalased. 
-- Same for the col (though the coaleased access works slighly differently), so also `n/32` global memory accesses. 
+Let's assume we have a matrix `M` of size `(m, n)` and a matrix N of size `(n, o)`. We assume `float32`, so 4 bytes, as a data type. 
+In the kernel with tiling, we still have a single thread for each of the elements of the output matrix, but now we have somehow reduced the amount of work to be done. Now we:
+- Each thread loads only `n/TILE_SIZE` or `n/32` values from the global memory from matrix `M`; the other consecutive 31 values are loaded by the consecutive threads in the warp. Note that the `TILE_SIZE` is exactly the size of a warp, so all of the memory access is coalesced. 
+- Same for the col (though the coalesced access works slightly differently), so also `n/32` global memory accesses. 
 - The number of multiplications and additions remains the same as before, so `n` and `n-1` so `~2n` operations. 
 
-So `2n operations / (4 bytes * n / 32) = 16operations/B` - so much much better (32x better to be precise). 
+So `2n operations / (4 bytes * 2n / 32) = 8 operations/B` - so much much better (32x better to be precise). 
 
 
 **c. The kernel described in this chapter with shared memory tiling applied using a tile size of 32 × 32 and thread coarsening applied using a coarsening factor of 4.**
 
+In the kernel with tiling and coarsing, we get some further improvement for memory loading. 
+
+- For the first matrix (`M`), we do `n/32` loads from the global memory as before. Previously we had to repeat this for every single block. Previously the tile was only used in a single block and had to be reaccessed in all other blocks. Now we are reusing this tile `coarsening factor` times, or `4` times in this case. Decreasing the memory access to `n/32/4` = `n/128`.
+- For the second matrix (`N`), everything stays as it was, so `n/32` mem accesses. 
+- The number of multiplications and additions remains the same as before, so `n` and `n-1` so `~2n` operations. 
+
+So overall, `2n operations / (4 bytes * (n/32 + n/128)) = 2n operations / (4B * (5n/128)) = 12.8 Operations/B`. Even better OP/B ratio than before.
