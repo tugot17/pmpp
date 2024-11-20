@@ -90,7 +90,7 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n,
     float *Mds = sharedMem;
     float *Nds = &sharedMem[tileWidth * tileWidth];
 
-    // let's save these for convinience
+    // let's save these for convenience
     int by = blockIdx.y;
     int bx = blockIdx.x;
     int ty = threadIdx.y;
@@ -109,7 +109,7 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n,
             Mds[ty * tileWidth + tx] = 0.0f;
 
         if ((ph * tileWidth + ty) < n && (col < o))
-            Nds[ty * tileWidth + tx] = N[(ph * tileWidth + ty) * o + col]; // col is from ty + phase + actuall col in the phase
+            Nds[ty * tileWidth + tx] = N[(ph * tileWidth + ty) * o + col]; // col is from ty + phase + actual col in the phase
         else
             Nds[ty * tileWidth + tx] = 0.0f;
 

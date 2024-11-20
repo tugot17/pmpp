@@ -69,7 +69,7 @@ __global__ void TiledMatrixMulKernel(float *M, float *N, float *P, int m, int n,
             Mds[ty][tx] = 0.0f;
 
         if ((ph * TILE_WIDTH + ty) < n && (col < o))
-            Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * o + col]; // col is from ty + phase + actuall col in the phase
+            Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * o + col]; // col is from ty + phase + actual col in the phase
         else
             Nds[ty][tx] = 0.0f;
 

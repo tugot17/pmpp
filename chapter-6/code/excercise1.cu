@@ -121,7 +121,7 @@ void inPlaceMatrixTranspose(float *M, int m, int n){
     cudaMalloc((void **)&d_M, m * n * sizeof(float));
     cudaMemcpy(d_M, M, m* n * sizeof(float), cudaMemcpyHostToDevice);
 
-    //this is slighly hacky version, we run basically a single block, this won't scale to larger matrices
+    //this is a slightly hacky version, we run basically a single block, this won't scale to larger matrices
     dim3 dimBlock(n, m);
     dim3 dimGrid(cdiv(n, dimBlock.x), cdiv(m, dimBlock.y));
 

@@ -84,7 +84,7 @@ Coalesced access requires that all of the threads in the warp access the neighbo
 **For each of the following memory accesses, specify whether they are coalesced or uncoalesced or coalescing is not applicable:**
 
 - **a. The access to array a of line 05**
-`a[blockIdx.x*blockDim.x + threadIdx.x]` the neighbouring threads within a block will access the neighbouring memory cells (subsequent `threadIdx.x`) - so coalased access. 
+`a[blockIdx.x*blockDim.x + threadIdx.x]` the neighbouring threads within a block will access the neighbouring memory cells (subsequent `threadIdx.x`) - so coalesced access. 
 
 - **b. The access to array a_s of line 05**
 `a_s` is a shared memory, so it does not require coalescing. 

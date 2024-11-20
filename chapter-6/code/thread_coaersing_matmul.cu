@@ -73,7 +73,7 @@ __global__ void TiledMatrixMulKernelWithThreadCoarsening(float *M, float *N, flo
             int col = colStart + c * COARSE_FACTOR;
             
             if ((ph * TILE_WIDTH + ty) < n && (col < o))
-                Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * o + col]; // col is from ty + phase + actuall col in the phase
+                Nds[ty][tx] = N[(ph * TILE_WIDTH + ty) * o + col]; // col is from ty + phase + actual col in the phase
             else
                 Nds[ty][tx] = 0.0f;    
             __syncthreads(); // make sure everything is loaded to both tile matrices for the consecutive c
