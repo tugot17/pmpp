@@ -54,20 +54,71 @@ n = 4
 
 First if `i>0✅ && j<n ✅ && A[4] > B[3]❌`
 
-Second if `j>0 && 5 < m ❌`
+Second if `j>0 && i < m ❌`
 
-So we execute the third if—ending the loop, returning. 5So we ended up on the same value as in the intuitive explaination.
+So we execute the third if—ending the loop, returning `5`. So we ended up on the same value as in the intuitive explaination.
 
 ### Exercise 2
 
 **Complete the calculation of co-rank functions for thread 2 in Fig. 12.6.**
 
+![Fig. 12. 6](exercise2.png)
+
+Thread 2 starts at k=6, so we need to calculate `co_rank(6, A, 5, B, 4)`.  Intuitively, we see that the subarray `C[6:]` takes as an input nothing from the array `A` and three elements, starting at `1`, from array `B`. Hence, we expect the `co_rank` to be `5`, so that we know that we should take nothing from array `A` and start at `B[1]` for array `B`.
+
+Let's now analyze it step by step:
+
+```
+m = 5
+n = 4
+
+i = min(k,m) = min(6,5) = 5
+j = k - i = 6 - 5 = 1
+i_low = max(0,k-n) = max(0,6-4) = max(0,2) = 2
+j_low = max(0,k-m) = max(0,6-5) = max(0,1) = 1
+```
+
+First if `i>0✅ && j<n ✅ && A[4] > B[1]❌`
+
+Second if `j>0 && i < m ❌`
+
+So we trigger third case finishing the loop, returning `i=5` - same as we conculuded in the intuitive explaination.
+
 ### Exercise 3
 **For the for-loops that load A and B tiles in Fig. 12.12, add a call to the co- rank function so that we can load only the A and B elements that will be consumed in the current generation of the while-loop.**
+
+
 
 ### Exercise 4
 
 **Consider a parallel merge of two arrays of size 1,030,400 and 608,000. Assume that each thread merges eight elements and that a thread block size of 1024 is used.**
+
+The resulting arrray will be of length `1,030,400 + 608,000 = 1,638,400` elements. 
+
 **a. In the basic merge kernel in Fig. 12.9, how many threads perform a binary search on the data in the global memory?**
+
+```cpp
+__global__ void merge_basic_kernel(int* A, int m, int* B, int n, int* C) {
+    int tid = blockIdx.x*blockDim.x + threadIdx.x;
+    int elementsPerThread = ceil((m+n)/(blockDim.x*gridDim.x));
+    int k_curr = tid*elementsPerThread; // start output index
+    int k_next = min((tid+1)*elementsPerThread, m+n); // end output index
+    int i_curr = co_rank(k_curr, A, m, B, n);
+    int i_next = co_rank(k_next, A, m, B, n);
+    int j_curr = k_curr - i_curr;
+    int j_next = k_next - i_next;
+    merge_sequential(&A[i_curr], i_next-i_curr, &B[j_curr], j_next-j_curr, &C[k_curr]);
+}
+```
+
+And we call it with:
+
+```cpp
+merge_basic_kernel<<<dimGrid, dimBlock>>>(d_A, m, d_B, n, d_C);
+```
+
+For this kernel, each thread in the grid is performing a binary search
+
 **b. In the tiled merge kernel in Figs. 12.11 - 12.13, how many threads perform a binary search on the data in the global memory?**
+
 **c. In the tiled merge kernel in Figs. 12.11 - 12.13, how many threads perform a binary search on the data in the shared memory?**
