@@ -87,7 +87,30 @@ So we trigger third case finishing the loop, returning `i=5` - same as we concul
 ### Exercise 3
 **For the for-loops that load A and B tiles in Fig. 12.12, add a call to the co- rank function so that we can load only the A and B elements that will be consumed in the current generation of the while-loop.**
 
+```cpp
+while(counter < total_iteration){
+    // Determine the number of A elements (tileA) needed so that the total of
+    // tile_size merged elements is obtained. The remaining tileB elements come from B.
+    int tileA = co_rank(tile_size, 
+                        A + A_curr + A_consumed, A_length - A_consumed,
+                        B + B_curr + B_consumed, B_length - B_consumed);
+    int tileB = tile_size - tileA;  // tileB elements from B
 
+    // Load only the needed A elements into shared memory: i + threadIdx.x < tileA
+    for(int i = 0; i < tileA; i += blockDim.x) {
+        if (i + threadIdx.x < tileA) {
+            A_S[i + threadIdx.x] = A[A_curr + A_consumed + i + threadIdx.x];
+        }
+    }
+
+    // Load only the needed B elements into shared memory: i + threadIdx.x < tileB
+    for(int i = 0; i < tileB; i += blockDim.x) {
+        if(i + threadIdx.x < tileB) {
+            B_S[i + threadIdx.x] = B[B_curr + B_consumed + i + threadIdx.x];
+        }
+    }
+    __syncthreads();
+```
 
 ### Exercise 4
 
