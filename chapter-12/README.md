@@ -56,7 +56,7 @@ First if `i>0✅ && j<n ✅ && A[4] > B[3]❌`
 
 Second if `j>0 && i < m ❌`
 
-So we execute the third if—ending the loop, returning `5`. So we ended up on the same value as in the intuitive explaination.
+So we execute the third if—ending the loop, returning `5`. So we ended up on the same value as in the intuitive explanation.
 
 ### Exercise 2
 
@@ -82,7 +82,7 @@ First if `i>0✅ && j<n ✅ && A[4] > B[1]❌`
 
 Second if `j>0 && i < m ❌`
 
-So we trigger third case finishing the loop, returning `i=5` - same as we conculuded in the intuitive explaination.
+So we trigger third case finishing the loop, returning `i=5` - same as we conculuded in the intuitive explanation.
 
 ### Exercise 3
 **For the for-loops that load A and B tiles in Fig. 12.12, add a call to the co- rank function so that we can load only the A and B elements that will be consumed in the current generation of the while-loop.**
@@ -116,7 +116,7 @@ while(counter < total_iteration){
 
 **Consider a parallel merge of two arrays of size 1,030,400 and 608,000. Assume that each thread merges eight elements and that a thread block size of 1024 is used.**
 
-The resulting arrray will be of length `1,030,400 + 608,000 = 1,638,400` elements. 
+The resulting array will be of length `1,030,400 + 608,000 = 1,638,400` elements. 
 
 **a. In the basic merge kernel in Fig. 12.9, how many threads perform a binary search on the data in the global memory?**
 
@@ -212,4 +212,4 @@ We need to find out how many blocks we run (gridSize.x). We know that each threa
     }
 ```
 
-As we shown in **4b** there are total of `200` blocks, each with `1024` threads. Each thread is responsible for merging `8 elements` and we can see seach thread executing the binary search in the shared memory **three** times, in lines `41`, `43` and `50`. Hence we have `200 x 1024 = 204800` threads executing the binary search in shared memory.
+As we shown in **4b** there are total of `200` blocks, each with `1024` threads. Each thread is responsible for merging `8 elements` and we can see each thread executing the binary search in the shared memory **three** times, in lines `41`, `43` and `50`. Hence we have `200 x 1024 = 204800` threads executing the binary search in shared memory.
