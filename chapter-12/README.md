@@ -2,6 +2,15 @@
 
 ## Code
 
+We implement `merge_sequential`, `simple_merge_parallel_gpu` and `merge_parallel_with_tiling_gpu` mentioned in the chapter. To run the benchmark comparing the execution speed run:
+
+```bash
+nvcc merge_bench.cu -o merge_bench
+./merge_bench
+```
+
+We run the benchmark for two arrays of arbitrary lengths.
+
 ## Exercises
 
 ### Exercise 1
