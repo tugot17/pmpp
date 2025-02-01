@@ -111,14 +111,82 @@ __global__ void merge_basic_kernel(int* A, int m, int* B, int n, int* C) {
 }
 ```
 
-And we call it with:
-
-```cpp
-merge_basic_kernel<<<dimGrid, dimBlock>>>(d_A, m, d_B, n, d_C);
-```
-
-For this kernel, each thread in the grid is performing a binary search
+Since we have `1,638,400` elements, and we know that each thread is merging `8` elements, we will need `1638400 / 8 = 204800` threads. The data after the block size is irrelevant here. The kernel will be executed by every single thread in the grid, so it `204800` will be executing it.
 
 **b. In the tiled merge kernel in Figs. 12.11 - 12.13, how many threads perform a binary search on the data in the global memory?**
 
+```cpp
+01  __global__ void merge_tiled_kernel(int* A,int m, int* B, int n, int* C, int tile_size) {
+    /* shared memory allocation */
+02      extern __shared__ int shareAB[];
+03      int * A_S = &shareAB[0];                       // shareA is first half of shareAB
+04      int * B_S = &shareAB[tile_size];               // shareB is second half of shareAB
+05      int C_curr = blockIdx.x * ceil((m+n)/gridDim.x); // start point of block's C subarray
+06      int C_next = min((blockIdx.x+1) * ceil((m+n)/gridDim.x), (m+n)); // ending point
+
+07      if (threadIdx.x ==0){
+08          A_S[0] = co_rank(C_curr, A, m, B, n); // Make block-level co-rank values visible
+09          A_S[1] = co_rank(C_next, A, m, B, n); // to other threads in the block
+10      }
+11      __syncthreads();
+12      int A_curr  = A_S[0];
+13      int A_next  = A_S[1];
+14      int B_curr = C_curr - A_curr;
+15      int B_next  = C_next - A_next;
+16      __syncthreads();
+```
+
+For the merge_tiled_kernel we only perform a binary search twice per block—in lines `08` and `09` to calculate the beginning and the end of the block. Then all of the binary searches are done using the shared memory.
+
+We need to find out how many blocks we run (gridSize.x). We know that each thread merges `8` elements and that the block size is—hence,1024 each block merges `8 x 1024 = 8192` elements. The number of blocks in the grid is then `1638400 / 8192 = 20`. Since we have `200` blocks in the grid and one thread per block is doing the binary search, we have `200 x 1 = 200` threads doing the binary search on global memory.
+
+
 **c. In the tiled merge kernel in Figs. 12.11 - 12.13, how many threads perform a binary search on the data in the shared memory?**
+
+```cpp
+17  int counter = 0;                                    //iteration counter
+18  int C_length = C_next - C_curr;
+19  int A_length = A_next - A_curr;
+20  int B_length = B_next - B_curr;
+21  int total_iteration = ceil((C_length)/tile_size);   //total iteration
+22  int C_completed = 0;
+23  int A_consumed = 0;
+24  int B_consumed = 0;
+25  while(counter < total_iteration){
+26      /* loading tile-size A and B elements into shared memory */
+27      for(int i=0; i<tile_size; i+=blockDim.x){
+28          if( i + threadIdx.x < A_length - A_consumed) {
+29              A_S[i + threadIdx.x] = A[A_curr + A_consumed + i + threadIdx.x ];
+30          }
+31      }
+32      for(int i=0; i<tile_size; i+=blockDim.x) {
+33          if(i + threadIdx.x < B_length - B_consumed) {
+34              B_S[i + threadIdx.x] = B[B_curr + B_consumed + i + threadIdx.x];
+35          }
+36      }
+37      __syncthreads();
+37      int c_curr  = threadIdx.x    *  (tile_size/blockDim.x);
+38      int c_next = (threadIdx.x+1) * (tile_size/blockDim.x);
+39      c_curr = (c_curr <= C_length - C_completed) ? c_curr : C_length - C_completed;
+40      c_next = (c_next <= C_length - C_completed) ? c_next : C_length - C_completed;
+41      /* find co-rank for c_curr and c_next */
+        int a_curr = co_rank(c_curr, A_S, min(tile_size, A_length-A_consumed),
+42                                    B_S, min(tile_size, B_length-B_consumed));
+43      int b_curr = c_curr - a_curr;
+        int a_next = co_rank(c_next, A_S, min(tile_size, A_length-A_consumed),
+44                                    B_S, min(tile_size, B_length-B_consumed));
+45      int b_next = c_next - a_next;
+
+        /* All threads call the sequential merge function */
+46      merge_sequential (A_S+a_curr, a_next-a_curr, B_S+b_curr, b_next-b_curr,
+                         C+C_curr+C_completed+c_curr);
+47      /* Update the number of A and B elements that have been consumed thus far */
+48      counter ++;
+49      C_completed += tile_size;
+50      A_consumed += co_rank(tile_size, A_S, tile_size, B_S, tile_size);
+51      B_consumed = C_completed - A_consumed;
+52      __syncthreads();
+    }
+```
+
+As we shown in **4b** there are total of `200` blocks, each with `1024` threads. Each thread is responsible for merging `8 elements` and we can see seach thread executing the binary search in the shared memory **three** times, in lines `41`, `43` and `50`. Hence we have `200 x 1024 = 204800` threads executing the binary search in shared memory.
