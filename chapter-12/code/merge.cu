@@ -1,342 +1,304 @@
-// nvcc merge.cu -o merge
+// nvcc merge_bench.cu -o merge_bench
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+#include <algorithm> 
 
-#define cdiv(x, y) (((x) + (y)-1) / (y))
-#define TILE_SIZE 128
+#define cdiv(x, y) (((x) + (y) - 1) / (y))
+#define TILE_SIZE 256
 
-#define CUDA_CHECK(call)                                                                                 \
-    do {                                                                                                 \
-        cudaError_t error = call;                                                                        \
-        if (error != cudaSuccess) {                                                                      \
-            fprintf(stderr, "CUDA error at %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(error)); \
-            exit(EXIT_FAILURE);                                                                          \
-        }                                                                                                \
+#define CUDA_CHECK(call)                                                             \
+    do {                                                                             \
+        cudaError_t error = call;                                                    \
+        if (error != cudaSuccess) {                                                  \
+            fprintf(stderr, "CUDA error at %s:%d: %s\n", __FILE__, __LINE__,         \
+                    cudaGetErrorString(error));                                      \
+            exit(EXIT_FAILURE);                                                      \
+        }                                                                            \
     } while (0)
 
-
-float* createSortedArray(int length, float start, float step){
-    float* array = (float*)malloc(length * sizeof(float));
-    for(unsigned int i =0; i < length; i++){
-        array[i] = start + i * step;
+void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true);
+void clear_l2() {
+    static int l2_clear_size = 0;
+    static unsigned char* gpu_scratch_l2_clear = NULL;
+    if (!gpu_scratch_l2_clear) {
+        CUDA_CHECK(cudaDeviceGetAttribute(&l2_clear_size, cudaDevAttrL2CacheSize, 0));
+        l2_clear_size *= 2;  // extra padding, if desired
+        CUDA_CHECK(cudaMalloc(&gpu_scratch_l2_clear, l2_clear_size));
     }
-    return array;
+    CUDA_CHECK(cudaMemset(gpu_scratch_l2_clear, 0, l2_clear_size));
 }
 
-void printArray(float* array, int length) {
-    for (int i = 0; i < length; i++) {
-        printf("%.1f ", array[i]);
+__host__ __device__ void merge_sequential(float* A, int m, float* B, int n, float *C){
+    int i = 0, j = 0, k = 0;
+    while (i < m && j < n) {
+        if (A[i] <= B[j]) {
+            C[k++] = A[i++];
+        } else {
+            C[k++] = B[j++];
+        }
     }
-    printf("\n");
+    while (i < m) { C[k++] = A[i++]; }
+    while (j < n) { C[k++] = B[j++]; }
 }
 
-__host__ __device__ int co_rank(int k, float* A, int m, float* B, int n){
+__host__ __device__ int co_rank(int k, float* A, int m, float* B, int n) {
     int i = min(k, m);
-    int j = k-i;
+    int j = k - i;
 
-    int i_low = max(0, k-n);
-    int j_low = max(0, k-m);
+    int i_low = max(0, k - n);
+    int j_low = max(0, k - m);
     int delta;
 
     bool active = true;
-    while (active)
-    {   
-        //i too big
-        if(i >0 && j < n && A[i-1] > B[j]){
+    while (active) {   
+        // if i is too big, decrease it
+        if (i > 0 && j < n && A[i - 1] > B[j]) {
             delta = cdiv(i - i_low, 2);
             j_low = j;
-            
             i -= delta;
             j += delta;
-
         }
-        //i too small
-        else if (j > 0 && i < m && B[j-1] >= A[i]){
+        // if i is too small, increase it
+        else if (j > 0 && i < m && B[j - 1] >= A[i]) {
             delta = cdiv(j - j_low, 2);
             i_low = i;
             i += delta;
             j -= delta;
         }
-
-        //the condition A[i-j] <= B[j] and A[i] > B[j-1] satisfied
-        else{
+        else {
             active = false;
         }
     }
-
     return i;
 }
 
-__host__ __device__ void merge_sequential(float* A, int m, float* B, int n, float *C){
-    int i = 0; //index into C
-    int j = 0; //index into C
-    int k = 0; //index into C
-
-    //triage between values of A and B
-    while (i<m && j<n)
-    {
-        if (A[i] <= B[j]){
-            C[k++] = A[i++];
-        }
-        else{
-            C[k++] = B[j++];
-        }
-    }
-    
-    // Done with A handle remaining B
-    while (j < n)
-    {
-        C[k++] = B[j++];
-    }
-
-    // Done with A handle remaining A
-    while (i < m)
-    {
-        C[k++] = A[i++];
-    }
+__global__ void merge_sequential_kernel(float *A, int m, float *B, int n, float *C) {
+    if (threadIdx.x == 0 && blockIdx.x == 0)
+        merge_sequential(A, m, B, n, C);
 }
 
+// A basic parallel merge kernel 
 __global__ void merge_basic_kernel(float *A, int m, float* B, int n, float *C){
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     
-    //how many elements in the resulting array C to be processed by a single thread
+    // Determine how many elements each thread will process.
     int elementsPerThread = cdiv((m+n), blockDim.x * gridDim.x);
     
-    //output start and end indices
+    // Compute the output indices for this thread.
     int k_curr = tid * elementsPerThread;
     int k_next = min((tid+1) * elementsPerThread, m+n);
 
-    //corank for begenning of a subarray processed by the thread
+    // Compute the corresponding coranks in A and B.
     int i_curr = co_rank(k_curr, A, m, B, n);
     int j_curr = k_curr - i_curr;
-
-    //corank for end of a subarray processed by the thread
     int i_next = co_rank(k_next, A, m, B, n);
     int j_next = k_next - i_next;
 
-    //execute the sequential merge on the two subarrays
+    // Perform the sequential merge on the subarrays.
     merge_sequential(&A[i_curr], i_next-i_curr, &B[j_curr], j_next-j_curr, &C[k_curr]);
 }
 
-void simple_merge_parallel(float* A, int m, float* B, int n, float *C){
-    float* d_A;
-    float* d_B;
-    float* d_C;
-
-    int block_dim = 256;
-    dim3 dimBlock(block_dim);  // for now we stick to a single section executed within a single block
-    dim3 dimGrid(1);
-
-    CUDA_CHECK(cudaMalloc((void**)&d_A, m * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&d_B, n * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&d_C, (m+n) * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_A, A, m * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_B, B, n * sizeof(float), cudaMemcpyHostToDevice));
-
-
-    merge_basic_kernel<<<dimGrid, dimBlock>>>(d_A, m, d_B, n, d_C);
-
-    CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
-
-    CUDA_CHECK(cudaMemcpy(C, d_C, (m+n) * sizeof(float), cudaMemcpyDeviceToHost));
-
-    CUDA_CHECK(cudaFree(d_A));
-    CUDA_CHECK(cudaFree(d_B));
-    CUDA_CHECK(cudaFree(d_C));
-}
-
-
-__global__ void merge_tiled_kernel(float *A, int m, float* B, int n, float *C){
-    if (threadIdx.x == 0 && blockIdx.x == 0) {
-        printf("Block 0 starting: m=%d, n=%d\n", m, n);
-    }
-
-
+// A tiled merge kernel (unchanged)
+__global__ void merge_tiled_kernel(float *A, int m, float* B, int n, float *C) {
+    // Use shared memory for tiles from A and B.
     extern __shared__ float shareAB[];
+    float *A_S = shareAB;             // first half for A tile
+    float *B_S = shareAB + TILE_SIZE; // second half for B tile
+
+    int total = m + n;
+    int chunk = cdiv(total, gridDim.x);
+    int C_curr = blockIdx.x * chunk;
+    int C_next = min((blockIdx.x + 1) * chunk, total);
     
-    float *A_S = &shareAB[0]; //1st part for A_S
-    float *B_S = &shareAB[TILE_SIZE]; //2nd part for B_S
-
-    int C_curr = blockIdx.x * cdiv((m+n), gridDim.x); //here the C subarray starts
-    int C_next = min((blockIdx.x+1) * cdiv((m+n), gridDim.x), (m+n));//here the C subarray ends
-
-    //use thread 0 to calculate the co-rank for first and last element of the subarray C
-    //make it block level visible so all of the thrads have access to this
-    if (threadIdx.x == 0){
-        A_S[0] = co_rank(C_curr, A, m, B, n);
-        A_S[1] = co_rank(C_next, A, m, B, n);
+    if (threadIdx.x == 0) {
+        A_S[0] = (float)co_rank(C_curr, A, m, B, n);
+        A_S[1] = (float)co_rank(C_next, A, m, B, n);
     }
-    __syncthreads();//this ensures all of the threads have access to these values
-
-    int A_curr = A_S[0];
-    int A_next = A_S[1];
-    int B_curr = C_curr - A_curr;
-    int B_next = C_next - A_next;
     __syncthreads();
     
-    int counter = 0; 
+    int A_curr = (int)A_S[0];
+    int A_next = (int)A_S[1];
+    int B_curr = C_curr - A_curr;
+    int B_next = C_next - A_next;
+    
     int C_length = C_next - C_curr;
     int A_length = A_next - A_curr;
     int B_length = B_next - B_curr;
+    
     int total_iteration = cdiv(C_length, TILE_SIZE);
+    
     int C_completed = 0;
     int A_consumed = 0;
     int B_consumed = 0;
-
-    if (threadIdx.x == 0 && blockIdx.x == 0) {
-        printf("Block 0: A_curr=%d, A_next=%d, B_curr=%d, B_next=%d\n", 
-               A_curr, A_next, B_curr, B_next);
-        printf("C_length=%d, A_length=%d, B_length=%d\n", 
-               C_length, A_length, B_length);
-    }
-
-
-    while (counter < total_iteration)
-    {
-        //levergae all thereads in the block to load the data from global memory in a coalesced manner
-        for (unsigned i = 0; i < TILE_SIZE; i += blockDim.x){
-            if (i + threadIdx.x < A_length - A_consumed){
-                A_S[i + threadIdx.x] = A[A_curr + A_consumed + i + threadIdx.x];
-            }
-
-            if (i + threadIdx.x < B_length - B_consumed){
-                B_S[i + threadIdx.x] = B[B_curr + B_consumed + i + threadIdx.x];
-            }
+    int counter = 0;
+    
+    while (counter < total_iteration) {
+        int A_remaining = A_length - A_consumed;
+        int B_remaining = B_length - B_consumed;
+        int A_tile = min(TILE_SIZE, A_remaining);
+        int B_tile = min(TILE_SIZE, B_remaining);
+        int tile_merged = min(TILE_SIZE, C_length - C_completed);
+        
+        for (int i = threadIdx.x; i < A_tile; i += blockDim.x) {
+            A_S[i] = A[A_curr + A_consumed + i];
+        }
+        for (int i = threadIdx.x; i < B_tile; i += blockDim.x) {
+            B_S[i] = B[B_curr + B_consumed + i];
         }
         __syncthreads();
-
-        int c_curr = threadIdx.x * cdiv(TILE_SIZE, blockDim.x);
-        int c_next = min((threadIdx.x + 1) * cdiv(TILE_SIZE, blockDim.x), TILE_SIZE);
-
-        c_curr = min(c_curr, C_length - C_completed);
-        c_next = min(c_next, C_length - C_completed);
-
-        //find co-rank for c_curr and c_next
-        int a_curr = co_rank(c_curr, A_S, min(TILE_SIZE, A_length-A_consumed), B_S, min(TILE_SIZE, B_length-B_consumed));
-        int b_curr = c_curr - a_curr;
         
-        int a_next = co_rank(c_next, A_S, min(TILE_SIZE, A_length-A_consumed), B_S, min(TILE_SIZE, B_length-B_consumed));
-        int b_next = c_next - a_next;
-
-        if (threadIdx.x == 0 && blockIdx.x == 0) {
-            printf("Thread 0: c_curr=%d, c_next=%d, a_curr=%d, a_next=%d, b_curr=%d, b_next=%d\n",
-                c_curr, c_next, a_curr, a_next, b_curr, b_next);
-            printf("Writing to C at index: %d\n", C_curr + C_completed + c_curr);
-        }
-
-        //every thread calls the sequential merge function on its subarrays
-        merge_sequential(A_S+a_curr, a_next-a_curr, B_S+b_curr, b_next-b_curr, C+C_curr+C_completed+c_curr);
-
-        if (counter == 0 && threadIdx.x == 0 && blockIdx.x == 0) {
-            printf("First tile: A_consumed=%d, B_consumed=%d, C_completed=%d\n",
-                A_consumed, B_consumed, C_completed);
-            // Print first few elements of shared memory
-            printf("A_S[0-4]: %.1f %.1f %.1f %.1f %.1f\n", 
-                A_S[0], A_S[1], A_S[2], A_S[3], A_S[4]);
-            printf("B_S[0-4]: %.1f %.1f %.1f %.1f %.1f\n", 
-                B_S[0], B_S[1], B_S[2], B_S[3], B_S[4]);
-        }
-
-        counter++; 
-        C_completed += TILE_SIZE;
-        A_consumed += co_rank(TILE_SIZE, A_S, TILE_SIZE, B_S, TILE_SIZE);
-        B_consumed = C_completed - A_consumed;
+        int thread_chunk = cdiv(tile_merged, blockDim.x);
+        int c_tile_start = threadIdx.x * thread_chunk;
+        int c_tile_end = min((threadIdx.x + 1) * thread_chunk, tile_merged);
+        
+        int a_tile_start = co_rank(c_tile_start, A_S, A_tile, B_S, B_tile);
+        int b_tile_start = c_tile_start - a_tile_start;
+        int a_tile_end = co_rank(c_tile_end, A_S, A_tile, B_S, B_tile);
+        int b_tile_end = c_tile_end - a_tile_end;
+        
+        merge_sequential(
+            A_S + a_tile_start, a_tile_end - a_tile_start,
+            B_S + b_tile_start, b_tile_end - b_tile_start,
+            C + C_curr + C_completed + c_tile_start
+        );
+        __syncthreads();
+        
+        int consumed_from_A = co_rank(tile_merged, A_S, A_tile, B_S, B_tile);
+        A_consumed += consumed_from_A;
+        B_consumed += (tile_merged - consumed_from_A);
+        C_completed += tile_merged;
+        
+        counter++;
         __syncthreads();
     }
 }
 
-void merge_parallel_with_tiling(float* A, int m, float* B, int n, float *C){
-    float* d_A;
-    float* d_B;
-    float* d_C;
+void merge_sequential_gpu(float* d_A, int m, float* d_B, int n, float* d_C) {
+    merge_sequential_kernel<<<1, 1>>>(d_A, m, d_B, n, d_C);
+    CUDA_CHECK(cudaDeviceSynchronize());
+}
 
-    CUDA_CHECK(cudaMalloc((void**)&d_A, m * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&d_B, n * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&d_C, (m+n) * sizeof(float)));
+void simple_merge_parallel_gpu(float* d_A, int m, float* d_B, int n, float* d_C) {
+    int block_dim = 256;
+    dim3 dimBlock(block_dim);
+    dim3 dimGrid(1);
+    merge_basic_kernel<<<dimGrid, dimBlock>>>(d_A, m, d_B, n, d_C);
+    CUDA_CHECK(cudaDeviceSynchronize());
+}
 
-    CUDA_CHECK(cudaMemcpy(d_A, A, m * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_B, B, n * sizeof(float), cudaMemcpyHostToDevice));
-
-    int threadsPerBlock = 256; // Standard warp-aligned value
-    int numBlocks = (m + n + threadsPerBlock - 1) / threadsPerBlock; // Ceil division
-    numBlocks = min(numBlocks, 65535); // Maximum grid size limit
-
+void merge_parallel_with_tiling_gpu(float* d_A, int m, float* d_B, int n, float* d_C) {
+    int threadsPerBlock = 1024;
+    int numBlocks = (m + n + threadsPerBlock - 1) / threadsPerBlock;
+    numBlocks = min(numBlocks, 65535);
     dim3 dimBlock(threadsPerBlock);
     dim3 dimGrid(numBlocks);
-
-    merge_tiled_kernel<<<dimGrid, dimBlock, 2 * TILE_SIZE * sizeof(float)>>>(d_A, m, d_B, n, d_C);
-
-    CUDA_CHECK(cudaGetLastError());
+    int sharedMemBytes = 2 * TILE_SIZE * sizeof(float);
+    merge_tiled_kernel<<<dimGrid, dimBlock, sharedMemBytes>>>(d_A, m, d_B, n, d_C);
     CUDA_CHECK(cudaDeviceSynchronize());
+}
 
-    CUDA_CHECK(cudaMemcpy(C, d_C, (m+n) * sizeof(float), cudaMemcpyDeviceToHost));
+float benchmark_merge(void (*merge_func)(float*, int, float*, int, float*),
+                        float* d_A, int m, float* d_B, int n, float* d_C,
+                        int warmup, int reps) {
+    for (int i = 0; i < warmup; ++i) {
+        merge_func(d_A, m, d_B, n, d_C);
+    }
+    
+    cudaEvent_t start, stop;
+    CUDA_CHECK(cudaEventCreate(&start));
+    CUDA_CHECK(cudaEventCreate(&stop));
+    
+    float totalTime_ms = 0.0f;
+    
+    for (int i = 0; i < reps; ++i) {
+        clear_l2();
+        
+        CUDA_CHECK(cudaEventRecord(start));
+        merge_func(d_A, m, d_B, n, d_C);
+        CUDA_CHECK(cudaEventRecord(stop));
+        CUDA_CHECK(cudaEventSynchronize(stop));
+        
+        float iterTime = 0.0f;
+        CUDA_CHECK(cudaEventElapsedTime(&iterTime, start, stop));
+        totalTime_ms += iterTime;
+    }
+    
+    CUDA_CHECK(cudaEventDestroy(start));
+    CUDA_CHECK(cudaEventDestroy(stop));
+    
+    return totalTime_ms / reps;
+}
 
-    CUDA_CHECK(cudaFree(d_A));
-    CUDA_CHECK(cudaFree(d_B));
-    CUDA_CHECK(cudaFree(d_C));
+float* createSortedArray(int length, float start, float step){
+    float* array = (float*)malloc(length * sizeof(float));
+    for (int i = 0; i < length; i++){
+        array[i] = start + i * step;
+    }
+    return array;
 }
 
 bool allclose(float* a, float* b, int N, float rtol = 1e-5, float atol = 1e-8) {
     for (int i = 0; i < N; i++) {
         float allowed_error = atol + rtol * fabs(b[i]);
         if (fabs(a[i] - b[i]) > allowed_error) {
-            printf("Arrays differ at index %d: %f != %f (allowed error: %f)\n", i, a[i], b[i], allowed_error);
-            printf("Values around error point:\n");
-            int start = (i > 5) ? i - 5 : 0;
-            int end = (i + 5 < N) ? i + 5 : N - 1;
-            printf("Index\tSequential\tParallel\n");
-            for (int j = start; j <= end; j++) {
-                printf("%d\t%.1f\t\t%.1f\n", j, a[j], b[j]);
-            }
+            printf("Arrays differ at index %d: %f != %f\n", i, a[i], b[i]);
             return false;
         }
     }
     return true;
 }
 
-int main()
-{
-    const int m = 37;
-    const int n = 38;
-    const int k = m + n;
+int main() {
+    const int m = 10283;
+    const int n = 131131;
+    const int total = m + n;
     
-    float* A = createSortedArray(m, 1.0f, 0.3f);
-    // float A[] = {1.0f, 1.3f, 1.6f, 1.9f, 2.2f};
-    // printf("Array 1: ");
-    // printArray(A, m);
-
-    float* B = createSortedArray(n, 1.5f, 0.4f);
-    // float B[] = {1.5f, 1.9f, 2.3f, 2.7f, 3.1f};
-    // printf("Array 2: ");
-    // printArray(B, n);
-
-    float C[k];
-    float C_2[k];
+    // Allocate and initialize host arrays.
+    float* h_A = createSortedArray(m, 1.0f, 0.3f);
+    float* h_B = createSortedArray(n, 1.5f, 0.4f);
+    float* h_C_ref = (float*)malloc(total * sizeof(float));  // for reference result
     
-    merge_sequential(A, m, B, n, C);
-    // printf("Array C sequential: ");
-    // printArray(C, k);
-
-    merge_parallel_with_tiling(A, m, B, n, C_2);
-    // printf("Array C parallel: ");
-    // printArray(C_2, k);
-
-    printf("\nComparing results:\n");
-    bool equal = allclose(C, C_2, k);
-    printf("Arrays are %s\n", equal ? "equal" : "different");
-
-    // printf("\nCo-ranks in Array C:\n");
-    // for (int i = 0; i < k; i++) {
-    //     int current = C[i];
-    //     int rank = co_rank(i + 1, A, m, B, n);
-    //     printf("Element: %d, Co-rank: %d\n", i, rank);
-    // }
-
+    // Compute reference result on host.
+    merge_sequential(h_A, m, h_B, n, h_C_ref);
+    
+    // Allocate device memory once.
+    float *d_A, *d_B, *d_C;
+    CUDA_CHECK(cudaMalloc((void**)&d_A, m * sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&d_B, n * sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void**)&d_C, total * sizeof(float)));
+    
+    // Copy input arrays to device once.
+    CUDA_CHECK(cudaMemcpy(d_A, h_A, m * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_B, h_B, n * sizeof(float), cudaMemcpyHostToDevice));
+    
+    const int warmup = 10;
+    const int reps = 50;
+    
+    float t_seq = benchmark_merge(merge_sequential_gpu, d_A, m, d_B, n, d_C, warmup, reps);
+    printf("GPU sequential merge (1 thread): %f ms\n", t_seq);
+    
+    float t_basic = benchmark_merge(simple_merge_parallel_gpu, d_A, m, d_B, n, d_C, warmup, reps);
+    printf("Naive parallel merge: %f ms\n", t_basic);
+    
+    float t_tiled = benchmark_merge(merge_parallel_with_tiling_gpu, d_A, m, d_B, n, d_C, warmup, reps);
+    printf("Tiled parallel merge: %f ms\n", t_tiled);
+    
+    float* h_C = (float*)malloc(total * sizeof(float));
+    CUDA_CHECK(cudaMemcpy(h_C, d_C, total * sizeof(float), cudaMemcpyDeviceToHost));
+    if (allclose(h_C, h_C_ref, total))
+        printf("Result is correct!\n");
+    else
+        printf("Result is incorrect!\n");
+    
+    free(h_A);
+    free(h_B);
+    free(h_C);
+    free(h_C_ref);
+    CUDA_CHECK(cudaFree(d_A));
+    CUDA_CHECK(cudaFree(d_B));
+    CUDA_CHECK(cudaFree(d_C));
+    
     return 0;
-
-    free(A);
-    free(B);
 }
