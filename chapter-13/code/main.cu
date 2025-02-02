@@ -138,7 +138,7 @@ int main() {
     unsigned int* d_array;
     gpuErrchk(cudaMalloc(&d_array, N * sizeof(unsigned int)));
 
-    float gpu_avg_ms = do_bench(gpuRadixSortDevice, d_array, h_unsorted, N, warmup, reps);
+    float gpu_avg_ms = do_bench(gpuRadixSortThreeKenels, d_array, h_unsorted, N, warmup, reps);
     printf("Average GPU sort time (kernel only): %f ms\n", gpu_avg_ms);
 
     unsigned int* h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));

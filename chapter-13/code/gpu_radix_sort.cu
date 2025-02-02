@@ -32,7 +32,7 @@ __global__ void scatterKernel(unsigned int* input, unsigned int* output,
 
 // This function sorts an array stored in device memory using radix sort.
 // It assumes the array contains 32-bit unsigned integers.
-void gpuRadixSortDevice(unsigned int *d_input, int N) {
+void gpuRadixSortThreeKenels(unsigned int *d_input, int N) {
     unsigned int *d_output, *d_bits;
     cudaMalloc((void**)&d_output, N * sizeof(unsigned int));
     cudaMalloc((void**)&d_bits,   N * sizeof(unsigned int));
