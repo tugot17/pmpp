@@ -8,7 +8,7 @@
 #include <cuda_runtime.h>
 #include <limits.h>
 
-#define SECTION_SIZE 256
+#define SECTION_SIZE 4
 
 int compare_uint(const void* a, const void* b) {
     unsigned int ua = *(const unsigned int*) a;
@@ -47,7 +47,7 @@ __device__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
     const unsigned int bid = bid_s;
     const unsigned int gid = bid * blockDim.x + tid;
 
-    // Phase 1: Load into shared memory
+    // Phase 1: Load and local scan (unchanged)
     if (gid < N) {
         buffer[tid] = X[gid];
     } else {
@@ -55,7 +55,7 @@ __device__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
     }
     __syncthreads();
 
-    // Kogge-Stone scan within block
+    // Kogge-Stone scan within block (unchanged)
     for (unsigned int stride = 1; stride < blockDim.x; stride *= 2) {
         float temp = buffer[tid];
         if (tid >= stride) {
@@ -65,7 +65,6 @@ __device__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
         buffer[tid] = temp;
     }
 
-    // Convert to exclusive scan
     float exclusive_value;
     if (tid == 0) {
         exclusive_value = 0.0f;
@@ -73,32 +72,36 @@ __device__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
         exclusive_value = buffer[tid - 1];
     }
 
-    // Store block's total sum before modifying shared memory
+    // Store block's total sum
     const float local_sum = buffer[blockDim.x - 1];
     
     // Phase 2: Inter-block sum propagation
     if (tid == 0) {
+        // Store this block's sum
+        scan_value[bid] = local_sum;
+        __threadfence();
+        atomicAdd(&flags[bid], 1);
+        
         if (bid > 0) {
-            while (atomicAdd(&flags[bid], 0) == 0) { }
-            previous_sum = scan_value[bid];
-            scan_value[bid + 1] = previous_sum + local_sum;
-            __threadfence();
-            atomicAdd(&flags[bid + 1], 1);
+            // Wait for all previous blocks
+            for (int prev_bid = 0; prev_bid < bid; prev_bid++) {
+                while (atomicAdd(&flags[prev_bid], 0) == 0) { }
+            }
+            
+            // Accumulate all previous blocks' sums
+            previous_sum = 0.0f;
+            for (int prev_bid = 0; prev_bid < bid; prev_bid++) {
+                previous_sum += scan_value[prev_bid];
+            }
         } else {
-            scan_value[1] = local_sum;
-            __threadfence();
-            atomicAdd(&flags[1], 1);
+            previous_sum = 0.0f;
         }
     }
     __syncthreads();
 
     // Phase 3: Write final result
     if (gid < N) {
-        if (bid > 0) {
-            X[gid] = exclusive_value + previous_sum;
-        } else {
-            X[gid] = exclusive_value;
-        }
+        X[gid] = exclusive_value + previous_sum;
     }
 }
 
@@ -113,24 +116,28 @@ __global__ void radix_sort_iter(unsigned int* input, unsigned int* output,
         unsigned int bit = (key >> iter) & 1;
         bits_float[i] = (float)bit;
     }
-    if(i == N-1) {
-        // Store the total number of ones at position N
-        bits_float[N] = 0;
-    }
 
-    hierarchical_kogge_stone_domino_exclusive_inplace(bits_float, scan_value, flags, blockCounter, N);
-
-    // After scan, compute total number of ones
-    if(i == N-1) {
-        bits_float[N] = bits_float[i] + ((input[i] >> iter) & 1);
+    // We need to compute the total before the scan
+    __syncthreads();  // Make sure all bits are written
+    
+    // Let the last valid thread compute the total
+    if (i == 0) {
+        float total = 0.0f;
+        for (int j = 0; j < N; j++) {
+            unsigned int key = input[j];
+            total += (float)((key >> iter) & 1);
+        }
+        bits_float[N] = total;
     }
     __syncthreads();
+
+    hierarchical_kogge_stone_domino_exclusive_inplace(bits_float, scan_value, flags, blockCounter, N);
 
     if(i < N) {
         unsigned int key = input[i];
         unsigned int bit = (key >> iter) & 1;
         float numOnesBefore = bits_float[i];
-        float numOnesTotal = bits_float[N];
+        float numOnesTotal = bits_float[N];  // Now this value is correct
         
         unsigned int dst;
         if(bit == 0) {
@@ -142,6 +149,7 @@ __global__ void radix_sort_iter(unsigned int* input, unsigned int* output,
     }
 }
 
+// Modified version with debug prints
 void gpuRadixSort(unsigned int *d_input, int N) {
     unsigned int *d_output;
     float *d_bits_float, *d_scan_value;
@@ -149,31 +157,67 @@ void gpuRadixSort(unsigned int *d_input, int N) {
     const int threadsPerBlock = SECTION_SIZE;
     const int numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
 
+    // For debugging - host array to copy bits_float
+    float *h_bits_float = (float*)malloc((N + 1) * sizeof(float));
+
     // Allocate device memory
     cudaMalloc((void**)&d_output, N * sizeof(unsigned int)); cudaCheckError();
-    cudaMalloc((void**)&d_bits_float, (N + 1) * sizeof(float)); cudaCheckError();  // +1 for total count
+    cudaMalloc((void**)&d_bits_float, (N + 1) * sizeof(float)); cudaCheckError();
     cudaMalloc((void**)&d_scan_value, (numBlocks + 1) * sizeof(float)); cudaCheckError();
     cudaMalloc((void**)&d_flags, (numBlocks + 1) * sizeof(int)); cudaCheckError();
     cudaMalloc((void**)&d_blockCounter, sizeof(int)); cudaCheckError();
 
-    // For each bit position (32-bit integers)
-    for (unsigned int iter = 0; iter < 32; iter++) {
+    // Debug: Print input array
+    unsigned int *h_input = (unsigned int*)malloc(N * sizeof(unsigned int));
+    cudaMemcpy(h_input, d_input, N * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+
+    // For each bit position (limit to 2 iterations as requested)
+    for (unsigned int iter = 0; iter < 2; iter++) {
+        printf("\n=== Iteration %u ===\n", iter);
+        printf("Current array: ");
+        for(int i = 0; i < N; i++) {
+            printf("%u ", h_input[i]);
+        }
+        printf("\n");
+
         // Reset synchronization arrays for each iteration
         cudaMemset(d_flags, 0, (numBlocks + 1) * sizeof(int)); cudaCheckError();
         cudaMemset(d_blockCounter, 0, sizeof(int)); cudaCheckError();
         cudaMemset(d_scan_value, 0, (numBlocks + 1) * sizeof(float)); cudaCheckError();
-        cudaMemset(d_bits_float + N, 0, sizeof(float)); cudaCheckError();  // Clear the total count position
+        cudaMemset(d_bits_float + N, 0, sizeof(float)); cudaCheckError();
+
+        // Print binary representation of each number for current bit
+        printf("Binary bits at position %u: ", iter);
+        for(int i = 0; i < N; i++) {
+            printf("%u ", (h_input[i] >> iter) & 1);
+        }
+        printf("\n");
         
         radix_sort_iter<<<numBlocks, threadsPerBlock, threadsPerBlock * sizeof(float)>>>
             (d_input, d_output, d_bits_float, d_scan_value, d_flags, d_blockCounter, N, iter);
         cudaCheckError();
         cudaDeviceSynchronize(); cudaCheckError();
 
+        // Debug: Print d_bits_float after scan
+        cudaMemcpy(h_bits_float, d_bits_float, (N + 1) * sizeof(float), cudaMemcpyDeviceToHost);
+        printf("Exclusive scan results: ");
+        for(int i = 0; i < N + 1; i++) {
+            printf("%.1f ", h_bits_float[i]);
+        }
+        printf("\n");
+
         // Swap input and output pointers
         unsigned int *temp = d_input;
         d_input = d_output;
         d_output = temp;
+
+        // Update h_input for next iteration
+        cudaMemcpy(h_input, d_input, N * sizeof(unsigned int), cudaMemcpyDeviceToHost);
     }
+
+    // Free debug arrays
+    free(h_bits_float);
+    free(h_input);
 
     // Free device memory
     cudaFree(d_output); cudaCheckError();
