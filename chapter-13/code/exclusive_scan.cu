@@ -19,7 +19,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
     }
 }
 
-__global__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, float* scan_value, int* flags, int* blockCounter,unsigned int N) {
+__global__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, float* scan_value, int* flags, int* blockCounter, unsigned int N) {
     extern __shared__ float buffer[];
     __shared__ unsigned int bid_s;
     __shared__ float previous_sum;
@@ -32,7 +32,7 @@ __global__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
     const unsigned int bid = bid_s;
     const unsigned int gid = bid * blockDim.x + tid;
 
-    // Phase 1: Load into shared memory
+    // Phase 1: Load and local scan (unchanged)
     if (gid < N) {
         buffer[tid] = X[gid];
     } else {
@@ -40,7 +40,7 @@ __global__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
     }
     __syncthreads();
 
-    // Kogge-Stone scan within block
+    // Kogge-Stone scan within block (unchanged)
     for (unsigned int stride = 1; stride < blockDim.x; stride *= 2) {
         float temp = buffer[tid];
         if (tid >= stride) {
@@ -50,7 +50,6 @@ __global__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
         buffer[tid] = temp;
     }
 
-    // Convert to exclusive scan
     float exclusive_value;
     if (tid == 0) {
         exclusive_value = 0.0f;
@@ -58,32 +57,36 @@ __global__ void hierarchical_kogge_stone_domino_exclusive_inplace(float* X, floa
         exclusive_value = buffer[tid - 1];
     }
 
-    // Store block's total sum before modifying shared memory
+    // Store block's total sum
     const float local_sum = buffer[blockDim.x - 1];
     
     // Phase 2: Inter-block sum propagation
     if (tid == 0) {
+        // Store this block's sum
+        scan_value[bid] = local_sum;
+        __threadfence();
+        atomicAdd(&flags[bid], 1);
+        
         if (bid > 0) {
-            while (atomicAdd(&flags[bid], 0) == 0) { }
-            previous_sum = scan_value[bid];
-            scan_value[bid + 1] = previous_sum + local_sum;
-            __threadfence();
-            atomicAdd(&flags[bid + 1], 1);
+            // Wait for all previous blocks
+            for (int prev_bid = 0; prev_bid < bid; prev_bid++) {
+                while (atomicAdd(&flags[prev_bid], 0) == 0) { }
+            }
+            
+            // Accumulate all previous blocks' sums
+            previous_sum = 0.0f;
+            for (int prev_bid = 0; prev_bid < bid; prev_bid++) {
+                previous_sum += scan_value[prev_bid];
+            }
         } else {
-            scan_value[1] = local_sum;
-            __threadfence();
-            atomicAdd(&flags[1], 1);
+            previous_sum = 0.0f;
         }
     }
     __syncthreads();
 
     // Phase 3: Write final result
     if (gid < N) {
-        if (bid > 0) {
-            X[gid] = exclusive_value + previous_sum;
-        } else {
-            X[gid] = exclusive_value;
-        }
+        X[gid] = exclusive_value + previous_sum;
     }
 }
 
