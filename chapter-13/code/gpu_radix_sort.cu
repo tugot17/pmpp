@@ -197,3 +197,177 @@ void gpuRadixSortSingleKernel(unsigned int *d_input, int N) {
     CUDA_CHECK(cudaFree(d_scan_value));
     CUDA_CHECK(cudaFree(d_flags));
 }
+
+/* 
+Each block load its section of d_input, computes the bits outstanding and puts that into the shared memory.
+Than we perform an exclusive scan on the data in the shared memory (using the Belloch algorithm).
+The per thread result is saved into d_localScan - aka we store here how many 1s preceeds the current element.
+We also save the each block's total ones into the `d_blockOneCount[blockIdx.x]` - to be used in the later phase.
+We also write out the bit value into d_bits global memory array so it can be later consumed by the scatter kernel. 
+*/
+__global__ void localScanKernel(unsigned int* d_input,
+                                unsigned int* d_localScan,
+                                unsigned int* d_blockOneCount,
+                                int N, unsigned int iter)
+{
+    extern __shared__ unsigned int s_bits_scan[]; //shared memory for the bits scan
+    int tid = threadIdx.x;
+    int gid = blockIdx.x * blockDim.x + tid;
+    unsigned int bit_val = 0;
+    if (gid < N){
+        unsigned int key = d_input[gid];
+        bit_val = (key >> iter) & 1;
+    }
+    else {
+        bit_val = 0;
+    }
+
+    s_bits_scan[tid] = bit_val;
+    __syncthreads();
+
+    // Up-sweep phase (reduce)
+    for (unsigned int offset = 1; offset < blockDim.x; offset *= 2){
+        int index = (tid + 1) * offset * 2 - 1;
+        if (index < blockDim.x){
+            s_bits_scan[index] += s_bits_scan[index - offset];
+        }
+        __syncthreads();
+    }
+
+    //save the block's total ones (the last element) and set it to zero for exclusive scan
+    if (tid == 0){
+        d_blockOneCount[blockIdx.x] = s_bits_scan[blockDim.x - 1];
+        s_bits_scan[blockDim.x - 1] = 0;
+    }
+    __syncthreads();
+
+    // Down sweep phase
+    for (unsigned int offset = blockDim.x / 2; offset >= 1; offset /= 2) {
+        int index = (tid + 1) * offset * 2 - 1;
+        if (index < blockDim.x) {
+            unsigned int t = s_bits_scan[index - offset];
+            s_bits_scan[index - offset] = s_bits_scan[index];
+            s_bits_scan[index] += t;
+        }
+        __syncthreads();
+        // Prevent underflow of offset
+        if (offset == 1) break;
+    }
+
+    // Write the result from shared memory to global memory.
+    if (gid < N) {
+        d_localScan[gid] = s_bits_scan[tid];
+    }
+
+}
+
+/*
+Each block uses its local scan results (in d_localScan) along with the 
+pre-computed global offsets for zeros and (d_blockZeroOffsets) and ones
+(d_blockOneOffsets) to compute for each element a destination index.
+For an element with bit==0 the local index is (tid-localPrefix: by how many ones to move it left)
+and for bit==1 it is just localPrefix
+The final destination is computed by adding the per-block offset
+*/
+__global__ void scatterKernelCoalesced(unsigned int* d_input, unsigned int* d_output,
+                                        unsigned int* d_localScan,
+                                        unsigned int* d_blockZeroOffsets,
+                                        unsigned int* d_blockOneOffsets,
+                                        unsigned int totalZeros,
+                                        int N, unsigned int iter)
+{
+    int tid = threadIdx.x;
+    int gid = blockIdx.x * blockDim.x + tid;
+    
+    if (gid < N){
+        unsigned int key = d_input[gid];
+        unsigned int bit = (key >> iter) & 1;
+        unsigned int local_prefix = d_localScan[gid]; //how many ones preceeds the current element
+        //we define dest, so that the memory save is done in a coaleased manner
+        unsigned int dest;
+        if (bit == 0){
+            dest = d_blockZeroOffsets[blockIdx.x] + tid - local_prefix; // how many zeros in blocks before + local tid - number of ones preceeding it
+        }
+        else{
+            dest = totalZeros + d_blockOneOffsets[blockIdx.x] + local_prefix; // how many zeros in total, plus how many ones in blocks before + number of ones precceding current element
+        }
+        d_output[dest] = key;
+    }
+}
+
+void gpuRadixSortWithMemoryCoalescing(unsigned int *d_input, int N)
+{
+    // Allocate extra arrays on device:
+    unsigned int *d_output, *d_bits, *d_localScan, *d_blockOneCount;
+    // For per–block offsets (there will be at most MAX_BLOCKS blocks)
+    unsigned int *d_blockZeroOffsets, *d_blockOneOffsets;
+    CUDA_CHECK(cudaMalloc((void**)&d_output, N * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc((void**)&d_bits, N * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc((void**)&d_localScan, N * sizeof(unsigned int)));
+    // One value per block (the grid size is computed below)
+    int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    CUDA_CHECK(cudaMalloc((void**)&d_blockOneCount, numBlocks * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc((void**)&d_blockZeroOffsets, numBlocks * sizeof(unsigned int)));
+    CUDA_CHECK(cudaMalloc((void**)&d_blockOneOffsets, numBlocks * sizeof(unsigned int)));
+
+    // Allocate temporary host arrays for block totals and offsets.
+    unsigned int* h_blockOneCount = (unsigned int*)malloc(numBlocks * sizeof(unsigned int));
+    unsigned int* h_blockZeroCount = (unsigned int*)malloc(numBlocks * sizeof(unsigned int));
+    unsigned int* h_blockZeroOffsets = (unsigned int*)malloc(numBlocks * sizeof(unsigned int));
+    unsigned int* h_blockOneOffsets = (unsigned int*)malloc(numBlocks * sizeof(unsigned int));
+    if (!h_blockOneCount || !h_blockZeroCount || !h_blockZeroOffsets || !h_blockOneOffsets) {
+        fprintf(stderr, "Failed to allocate host arrays for block totals.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    const int numBits = 32;
+    unsigned int totalZeros = 0;
+
+    for (unsigned int iter = 0; iter < numBits; iter++) {
+        localScanKernel<<<numBlocks, BLOCK_SIZE, BLOCK_SIZE * sizeof(unsigned int)>>>(
+            d_input, d_localScan, d_blockOneCount, N, iter);
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        // Copy per–block ones count to host and compute block zeros counts.
+        CUDA_CHECK(cudaMemcpy(h_blockOneCount, d_blockOneCount, numBlocks * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+        for (int i = 0; i < numBlocks; i++) {
+            // For all blocks except perhaps the last, there are BLOCK_SIZE elements; for the last block, it might be less.
+            int blockSize = ((i == numBlocks - 1) && (N % BLOCK_SIZE != 0)) ? (N % BLOCK_SIZE) : BLOCK_SIZE;
+            h_blockZeroCount[i] = blockSize - h_blockOneCount[i];
+        }
+        // Compute exclusive scan (prefix sums) on the block zeros and ones counts.
+        h_blockZeroOffsets[0] = 0;
+        h_blockOneOffsets[0] = 0;
+        for (int i = 1; i < numBlocks; i++) {
+            h_blockZeroOffsets[i] = h_blockZeroOffsets[i - 1] + h_blockZeroCount[i - 1];
+            h_blockOneOffsets[i] = h_blockOneOffsets[i - 1] + h_blockOneCount[i - 1];
+        }
+        // Total zeros is the sum of all block zeros.
+        totalZeros = h_blockZeroOffsets[numBlocks - 1] + h_blockZeroCount[numBlocks - 1];
+
+        // Copy the computed offsets back to the device.
+        CUDA_CHECK(cudaMemcpy(d_blockZeroOffsets, h_blockZeroOffsets, numBlocks * sizeof(unsigned int), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(d_blockOneOffsets, h_blockOneOffsets, numBlocks * sizeof(unsigned int), cudaMemcpyHostToDevice));
+
+        scatterKernelCoalesced<<<numBlocks, BLOCK_SIZE>>>(
+            d_input, d_output, d_localScan,
+            d_blockZeroOffsets, d_blockOneOffsets, totalZeros, N, iter);
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        unsigned int *temp = d_input;
+        d_input = d_output;
+        d_output = temp;
+    }
+
+    CUDA_CHECK(cudaFree(d_output));
+    CUDA_CHECK(cudaFree(d_bits));
+    CUDA_CHECK(cudaFree(d_localScan));
+    CUDA_CHECK(cudaFree(d_blockOneCount));
+    CUDA_CHECK(cudaFree(d_blockZeroOffsets));
+    CUDA_CHECK(cudaFree(d_blockOneOffsets));
+
+    free(h_blockOneCount);
+    free(h_blockZeroCount);
+    free(h_blockZeroOffsets);
+    free(h_blockOneOffsets);
+}

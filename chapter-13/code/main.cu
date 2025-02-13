@@ -1,3 +1,4 @@
+// main.cu
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -119,6 +120,17 @@ bool isSorted(unsigned int arr[], int size) {
     return true;
 }
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <stdbool.h>
+#include <cuda_runtime.h>
+#include <limits.h>
+#include "gpu_radix_sort.h"
+
+// [Previous code remains the same until the benchmarking section]
+
 int main() {
     int N = 100000;
     int warmup = 5;
@@ -138,29 +150,44 @@ int main() {
     unsigned int* d_array;
     gpuErrchk(cudaMalloc(&d_array, N * sizeof(unsigned int)));
 
-    // Test and benchmark three-kernel sort
+    unsigned int* h_sorted = NULL;
+
+    // Test and benchmark basic three-kernel implementation
     float gpu_three_kernel_ms = do_bench(gpuRadixSortThreeKernels, d_array, h_unsorted, N, warmup, reps);
-    printf("Average GPU three-kernel sort time: %f ms\n", gpu_three_kernel_ms);
-
-    unsigned int* h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
-    gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
-    if (isSorted(h_sorted, N)) {
-        printf("Three-kernel GPU sort is correct.\n");
-    } else {
-        printf("Three-kernel GPU sort is NOT sorted correctly!\n");
-    }
-    free(h_sorted);
-
-    // Test and benchmark single-kernel sort
-    float gpu_single_kernel_ms = do_bench(gpuRadixSortSingleKernel, d_array, h_unsorted, N, warmup, reps);
-    printf("Average GPU single-kernel sort time: %f ms\n", gpu_single_kernel_ms);
+    printf("Average GPU basic three-kernel sort time: %f ms\n", gpu_three_kernel_ms);
 
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
     if (isSorted(h_sorted, N)) {
-        printf("Single-kernel GPU sort is correct.\n");
+        printf("Basic three-kernel GPU sort is correct.\n");
     } else {
-        printf("Single-kernel GPU sort is NOT sorted correctly!\n");
+        printf("Basic three-kernel GPU sort is NOT sorted correctly!\n");
+    }
+    free(h_sorted);
+
+    // // Test and benchmark single-kernel sort
+    // float gpu_single_kernel_ms = do_bench(gpuRadixSortSingleKernel, d_array, h_unsorted, N, warmup, reps);
+    // printf("Average GPU single-kernel sort time: %f ms\n", gpu_single_kernel_ms);
+
+    // h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
+    // gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+    // if (isSorted(h_sorted, N)) {
+    //     printf("Single-kernel GPU sort is correct.\n");
+    // } else {
+    //     printf("Single-kernel GPU sort is NOT sorted correctly!\n");
+    // }
+    // free(h_sorted);
+
+    // Test and benchmark memory-coalesced version
+    float gpu_coalesced_ms = do_bench(gpuRadixSortWithMemoryCoalescing, d_array, h_unsorted, N, warmup, reps);
+    printf("Average GPU memory-coalesced sort time: %f ms\n", gpu_coalesced_ms);
+
+    h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
+    gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
+    if (isSorted(h_sorted, N)) {
+        printf("Memory-coalesced GPU sort is correct.\n");
+    } else {
+        printf("Memory-coalesced GPU sort is NOT sorted correctly!\n");
     }
     free(h_sorted);
 
@@ -169,9 +196,12 @@ int main() {
     printf("Average CPU sort time (qsort): %f ms\n", cpu_avg_ms);
 
     printf("\nPerformance Summary:\n");
-    printf("Three-kernel GPU Speedup vs CPU: %.2fx\n", cpu_avg_ms / gpu_three_kernel_ms);
-    printf("Single-kernel GPU Speedup vs CPU: %.2fx\n", cpu_avg_ms / gpu_single_kernel_ms);
-    printf("Single-kernel vs Three-kernel ratio: %.2fx\n", gpu_three_kernel_ms / gpu_single_kernel_ms);
+    printf("Basic three-kernel GPU Speedup vs CPU: %.2fx\n", cpu_avg_ms / gpu_three_kernel_ms);
+    // printf("Single-kernel GPU Speedup vs CPU: %.2fx\n", cpu_avg_ms / gpu_single_kernel_ms);
+    printf("Memory-coalesced GPU Speedup vs CPU: %.2fx\n", cpu_avg_ms / gpu_coalesced_ms);
+    // printf("Single-kernel vs Three-kernel ratio: %.2fx\n", gpu_three_kernel_ms / gpu_single_kernel_ms);
+    printf("Memory-coalesced vs basic three-kernel speedup: %.2fx\n", gpu_three_kernel_ms / gpu_coalesced_ms);
+    // printf("Memory-coalesced vs Single-kernel ratio: %.2fx\n", gpu_single_kernel_ms / gpu_improved_ms);
 
     gpuErrchk(cudaFree(d_array));
     free(h_unsorted);

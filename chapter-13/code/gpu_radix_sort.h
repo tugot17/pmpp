@@ -20,5 +20,6 @@
 // Function declarations
 void gpuRadixSortThreeKernels(unsigned int *d_input, int N);
 void gpuRadixSortSingleKernel(unsigned int *d_input, int N);
+void gpuRadixSortWithMemoryCoalescing(unsigned int *d_input, int N);
 
 #endif // GPU_RADIX_SORT_H
