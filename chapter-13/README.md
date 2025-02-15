@@ -58,7 +58,7 @@ As above, the kernel is quite extensive; hence, it is best if you just look dire
 
 **Extend the kernel in Fig. 13.4 by applying thread coarsening to improve memory coalescing.**
 
-As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [gpu_radix_sort.cu]https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#670).
+As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [gpu_radix_sort.cu](https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#670).
 
 ### Exercise 4
 
