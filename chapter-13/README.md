@@ -46,23 +46,23 @@ nvcc sort.cu -o sort
 ### Exercise 1
 **Extend the kernel in Fig. 13.4 by using shared memory to improve memory coalescing.**
 
-The kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#L298](gpu_radix_sort.cu)
+The kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [gpu_radix_sort.cu](https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#L298)
 
 ### Exercise 2
 
 **Extend the kernel in Fig. 13.4 to work for a multibit radix.**
 
-As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#L459](gpu_radix_sort.cu)
+As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [gpu_radix_sort.cu](https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#L459)
 
 ### Exercise 3
 
 **Extend the kernel in Fig. 13.4 by applying thread coarsening to improve memory coalescing.**
 
-As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#670](gpu_radix_sort.cu).
+As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [gpu_radix_sort.cu]https://github.com/tugot17/pmpp/chapter-13/code/gpu_radix_sort.cu#670).
 
 ### Exercise 4
 
 **Implement parallel merge sort using the parallel merge implementation from Chapter 12, Merge.**
 
-As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [https://github.com/tugot17/pmpp/chapter-13/code/gpu_merge_sort.cu#L117](gpu_merge_sort.cu).
+As above, the kernel is quite extensive; hence, it is best if you just look directly at the implementation to be found in [gpu_merge_sort.cu](https://github.com/tugot17/pmpp/chapter-13/code/gpu_merge_sort.cu#L117).
 
