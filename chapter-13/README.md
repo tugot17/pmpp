@@ -35,7 +35,7 @@ For `N = 10,000,000;` you should be seeing something like:
 There are probably some further optimizations to be implemented here to get every last squeeze of performance, but we consider this a form of an exercise and don't delve much deeper.
 
 We also implement Vanilla parallel radix sort with a single kernel. The main challenge here is the synchronization across the entire grid. The hard part is that the first block needs to wait for the last one because we need the total number of zeros in the entire input. Unfortunately, after crossing somewhere above 100k elements, it gets deadlocked. Hence we leave it out of the benchmark.
-For simple experimentation with different implementations of sort, I recommend you use [code/sort](sort.cu) where you can easily try new parallel sort implementations. It will be compared to the `quicksort` standard library. This is where you can try the single kernel version of parallel radix sort mentioned above.
+For simple experimentation with different implementations of sort, I recommend you use [code/sort.cu](sort.cu) where you can easily try new parallel sort implementations. It will be compared to the `quicksort` standard library. This is where you can try the single kernel version of parallel radix sort mentioned above.
 
 ```bash
 nvcc sort.cu -o sort
