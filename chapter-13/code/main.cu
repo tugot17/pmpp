@@ -151,7 +151,7 @@ void printTableFooter() {
 }
 
 int main() {
-    int N = 1000000;
+    int N = 10000000;
     int warmup = 5;
     int reps = 15;
 
@@ -235,7 +235,7 @@ int main() {
 
     // Benchmark: GPU merge sort
     printf("\n=== GPU Merge Sort ===\n");
-    float gpu_merge_sort_ms = do_bench(gpuMergeSortUnsignedInt, d_array, h_unsorted, N, warmup, reps);
+    float gpu_merge_sort_ms = do_bench(gpuMergeSort, d_array, h_unsorted, N, warmup, reps);
     printf("Average GPU merge sort time: %f ms\n", gpu_merge_sort_ms);
 
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));

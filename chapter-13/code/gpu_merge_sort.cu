@@ -29,7 +29,7 @@ __host__ __device__ int cdiv(int a, int b) {
 
 // co_rank determines the split point between two sorted arrays A and B.
 // (Here, we work on unsigned ints instead of floats.)
-__host__ __device__ int co_rank_uint(int k, unsigned int* A, int m, unsigned int* B, int n) {
+__host__ __device__ int co_rank(int k, unsigned int* A, int m, unsigned int* B, int n) {
     int i = min(k, m);
     int j = k - i;
     
@@ -60,7 +60,7 @@ __host__ __device__ int co_rank_uint(int k, unsigned int* A, int m, unsigned int
 }
 
 // A sequential merge that merges two sorted segments.
-__host__ __device__ void merge_sequential_uint(unsigned int* A, int m,
+__host__ __device__ void merge_sequential(unsigned int* A, int m,
                                                 unsigned int* B, int n,
                                                 unsigned int* C) {
     int i = 0, j = 0, k = 0;
@@ -80,7 +80,7 @@ __host__ __device__ void merge_sequential_uint(unsigned int* A, int m,
 }
 
 // Each block merges a pair of sorted subarrays.
-__global__ void merge_pass_kernel_uint(unsigned int* d_in, unsigned int* d_out, int N, int width) {
+__global__ void merge_pass_kernel(unsigned int* d_in, unsigned int* d_out, int N, int width) {
     int pair = blockIdx.x;
     int start = pair * (2 * width);
     if (start >= N) return;
@@ -103,18 +103,18 @@ __global__ void merge_pass_kernel_uint(unsigned int* d_in, unsigned int* d_out, 
     int k_start = tid * elementsPerThread;
     int k_end   = min((tid + 1) * elementsPerThread, total);
     
-    int i_start = co_rank_uint(k_start, A, lenA, B, lenB);
+    int i_start = co_rank(k_start, A, lenA, B, lenB);
     int j_start = k_start - i_start;
-    int i_end   = co_rank_uint(k_end, A, lenA, B, lenB);
+    int i_end   = co_rank(k_end, A, lenA, B, lenB);
     int j_end   = k_end - i_end;
     
-    merge_sequential_uint(A + i_start, i_end - i_start,
+    merge_sequential(A + i_start, i_end - i_start,
                           B + j_start, j_end - j_start,
                           C + k_start);
 }
 
 // The main GPU merge sort routine.
-void gpuMergeSortUnsignedInt(unsigned int* d_input, int N) {
+void gpuMergeSort(unsigned int* d_input, int N) {
     unsigned int* d_output;
     CUDA_CHECK(cudaMalloc((void**)&d_output, N * sizeof(unsigned int)));
     
@@ -124,7 +124,7 @@ void gpuMergeSortUnsignedInt(unsigned int* d_input, int N) {
     while (width < N) {
         int numMerges = (N + 2 * width - 1) / (2 * width);
         
-        merge_pass_kernel_uint<<<numMerges, BLOCK_SIZE>>>(d_input, d_output, N, width);
+        merge_pass_kernel<<<numMerges, BLOCK_SIZE>>>(d_input, d_output, N, width);
         CUDA_CHECK(cudaDeviceSynchronize());
         
         // Swap pointers between d_input and d_output.

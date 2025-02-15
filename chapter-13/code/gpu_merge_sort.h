@@ -9,6 +9,6 @@
 #endif
 
 // Declaration for GPU merge sort on unsigned int arrays.
-void gpuMergeSortUnsignedInt(unsigned int* d_input, int N);
+void gpuMergeSort(unsigned int* d_input, int N);
 
 #endif // GPU_MERGE_SORT_H
