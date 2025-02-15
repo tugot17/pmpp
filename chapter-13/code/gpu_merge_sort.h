@@ -1,14 +1,12 @@
-#ifndef GPU_MERGE_SORT_H
-#define GPU_MERGE_SORT_H
+#ifndef CHAPTER_13_CODE_GPU_MERGE_SORT_H_
+#define CHAPTER_13_CODE_GPU_MERGE_SORT_H_
 
 #include <cuda_runtime.h>
 
-// Use the same block size as in your other kernels.
 #ifndef BLOCK_SIZE
 #define BLOCK_SIZE 1024
 #endif
 
-// Declaration for GPU merge sort on unsigned int arrays.
 void gpuMergeSort(unsigned int* d_input, int N);
 
-#endif // GPU_MERGE_SORT_H
+#endif  // CHAPTER_13_CODE_GPU_MERGE_SORT_H_

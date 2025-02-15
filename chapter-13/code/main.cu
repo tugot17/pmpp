@@ -1,21 +1,23 @@
+#include <cuda_runtime.h>
+#include <limits.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <stdbool.h>
-#include <cuda_runtime.h>
-#include <limits.h>
-#include "gpu_radix_sort.h"
-#include "gpu_merge_sort.h"
 
-#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-   if (code != cudaSuccess)
-   {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) exit(code);
-   }
+#include "gpu_merge_sort.h"
+#include "gpu_radix_sort.h"
+
+#define gpuErrchk(ans) \
+    { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort = true) {
+    if (code != cudaSuccess) {
+        fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+        if (abort) {
+            exit(code);
+        }
+    }
 }
 
 void clear_l2() {
@@ -31,16 +33,10 @@ void clear_l2() {
     gpuErrchk(cudaMemset(gpu_scratch_l2_clear, 0, l2_clear_size));
 }
 
-float do_bench(void (*sort_func)(unsigned int*, int),
-               unsigned int* d_array,
-               const unsigned int* h_unsorted,
-               int N,
-               int warmup,
-               int reps)
-{
+float do_bench(void (*sort_func)(unsigned int*, int), unsigned int* d_array, const unsigned int* h_unsorted, int N,
+               int warmup, int reps) {
     for (int i = 0; i < warmup; i++) {
-        gpuErrchk(cudaMemcpy(d_array, h_unsorted, N * sizeof(unsigned int),
-                             cudaMemcpyHostToDevice));
+        gpuErrchk(cudaMemcpy(d_array, h_unsorted, N * sizeof(unsigned int), cudaMemcpyHostToDevice));
         sort_func(d_array, N);
     }
 
@@ -51,8 +47,7 @@ float do_bench(void (*sort_func)(unsigned int*, int),
     float totalTime_ms = 0.0f;
     for (int i = 0; i < reps; i++) {
         // Before each run, copy the unsorted data into device memory.
-        gpuErrchk(cudaMemcpy(d_array, h_unsorted, N * sizeof(unsigned int),
-                             cudaMemcpyHostToDevice));
+        gpuErrchk(cudaMemcpy(d_array, h_unsorted, N * sizeof(unsigned int), cudaMemcpyHostToDevice));
 
         clear_l2();  // Clear L2 cache to reduce inter-run effects
 
@@ -71,12 +66,8 @@ float do_bench(void (*sort_func)(unsigned int*, int),
     return totalTime_ms / reps;
 }
 
-double do_bench_cpu(void (*sort_func)(unsigned int*, int),
-                    const unsigned int* h_unsorted,
-                    int N,
-                    int warmup,
-                    int reps)
-{
+double do_bench_cpu(void (*sort_func)(unsigned int*, int), const unsigned int* h_unsorted, int N, int warmup,
+                    int reps) {
     unsigned int* temp = (unsigned int*)malloc(N * sizeof(unsigned int));
     if (!temp) {
         fprintf(stderr, "Failed to allocate temporary memory for CPU benchmark.\n");
@@ -102,8 +93,8 @@ double do_bench_cpu(void (*sort_func)(unsigned int*, int),
 }
 
 int compare_uint(const void* a, const void* b) {
-    unsigned int ua = *(const unsigned int*) a;
-    unsigned int ub = *(const unsigned int*) b;
+    unsigned int ua = *(const unsigned int*)a;
+    unsigned int ub = *(const unsigned int*)b;
     return (ua > ub) - (ua < ub);
 }
 
@@ -220,8 +211,10 @@ int main() {
     // Benchmark: Memory-coalesced GPU sort (multiradix and thread coarsening)
     printf("\n=== Memory-Coalesced GPU Radix Sort (multiradix and thread coarsening) ===\n");
     printf("Running with radix value of %d and thread coarsening\n", RADIX);
-    float gpu_coalesced_radix_coarsening_ms = do_bench(gpuRadixSortCoalescedRadixCoarseningWrapper, d_array, h_unsorted, N, warmup, reps);
-    printf("Average GPU memory-coalesced (multiradix and thread coarsening) sort time: %f ms\n", gpu_coalesced_radix_coarsening_ms);
+    float gpu_coalesced_radix_coarsening_ms =
+        do_bench(gpuRadixSortCoalescedRadixCoarseningWrapper, d_array, h_unsorted, N, warmup, reps);
+    printf("Average GPU memory-coalesced (multiradix and thread coarsening) sort time: %f ms\n",
+           gpu_coalesced_radix_coarsening_ms);
 
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
@@ -260,7 +253,8 @@ int main() {
     printTableRow("Naive Parallel Radix Sort", gpu_naive_ms, cpu_avg_ms);
     printTableRow("Memory-coalesced GPU sort", gpu_coalesced_ms, cpu_avg_ms);
     printTableRow("Memory-coalesced GPU sort (multiradix)", gpu_coalesced_radix_ms, cpu_avg_ms);
-    printTableRow("Memory-coalesced GPU sort (multiradix and thread coarsening)", gpu_coalesced_radix_coarsening_ms, cpu_avg_ms);
+    printTableRow("Memory-coalesced GPU sort (multiradix and thread coarsening)", gpu_coalesced_radix_coarsening_ms,
+                  cpu_avg_ms);
     printTableRow("GPU merge sort", gpu_merge_sort_ms, cpu_avg_ms);
     printTableFooter();
 
