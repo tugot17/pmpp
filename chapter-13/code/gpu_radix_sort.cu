@@ -765,3 +765,5 @@ void gpuRadixSortCoalescedRadixCoarsening(unsigned int *d_input, int N, unsigned
     free(total_bucket);
     free(prefix_bucket);
 }
+
+

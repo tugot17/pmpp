@@ -102,7 +102,7 @@ __global__ void merge_basic_kernel(float* A, int m, float* B, int n, float* C) {
     merge_sequential(&A[i_curr], i_next - i_curr, &B[j_curr], j_next - j_curr, &C[k_curr]);
 }
 
-// A tiled merge kernel (unchanged)
+// A tiled merge kernel
 __global__ void merge_tiled_kernel(float* A, int m, float* B, int n, float* C) {
     // Use shared memory for tiles from A and B.
     extern __shared__ float shareAB[];
