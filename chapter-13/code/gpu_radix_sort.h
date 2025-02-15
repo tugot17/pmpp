@@ -7,6 +7,7 @@
 #define BLOCK_SIZE 1024
 #define NUM_BITS 32
 #define MAX_INPUT_SIZE 100000
+#define RADIX 4
 
 // Unified error checking
 #define CUDA_CHECK(call) { \
@@ -21,5 +22,6 @@
 void gpuRadixSortThreeKernels(unsigned int *d_input, int N);
 void gpuRadixSortSingleKernel(unsigned int *d_input, int N);
 void gpuRadixSortWithMemoryCoalescing(unsigned int *d_input, int N);
+void gpuRadixSortCoalescedRadix(unsigned int *d_input, int N, unsigned int r);
 
 #endif // GPU_RADIX_SORT_H

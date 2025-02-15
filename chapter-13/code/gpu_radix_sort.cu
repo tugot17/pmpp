@@ -371,3 +371,182 @@ void gpuRadixSortWithMemoryCoalescing(unsigned int *d_input, int N)
     free(h_blockZeroOffsets);
     free(h_blockOneOffsets);
 }
+/*
+For each key in d_input we extract the digit. In shared memory we build a histogram (s_hist) for the block. 
+We also store the keys digit in the latter part of the shared memory (s_digits). Then, each thread computes the local offset, aka
+how many keys with the same digit appear before it. 
+*/
+__global__ void localScanKernelRadix(const unsigned int* d_input,
+                                        unsigned int* d_localOffsets,
+                                        unsigned int* d_blockHist,
+                                        int N, unsigned int iter, unsigned int r)
+{
+    const unsigned int numBuckets = 1 << r; //2^r, e.g. 2^4 = 16
+    extern __shared__ unsigned int shared[]; 
+
+    //we store local histograms + each thread's digit
+    unsigned int* s_hist = shared;
+    unsigned int* s_digits = (unsigned int*)&s_hist[numBuckets];
+
+    int tid = threadIdx.x;
+    int gid = blockIdx.x * blockDim.x + tid;
+
+    unsigned int digit = 0;
+    if (gid < N){
+        unsigned int key = d_input[gid];
+        digit = (key >> (iter * r) & (numBuckets - 1));
+    }
+    s_digits[tid] = digit;
+
+    //init a shared histogram for block
+    for (unsigned int i = tid; i < numBuckets; i+= blockDim.x){
+        s_hist[i] = 0;
+    }
+    __syncthreads();
+
+    //use atomic operation to increase bucket value for a digit
+    if (gid < N){
+        atomicAdd(&s_hist[digit], 1);
+    }
+    __syncthreads();
+
+    //write the histograms into the global memory, to be used later
+    for (unsigned int i = tid; i < numBuckets; i+= blockDim.x){
+        d_blockHist[blockIdx.x * numBuckets + i] = s_hist[i];
+    }
+    __syncthreads();
+
+    //calculate how many numbers with the same digit for this iteration are before
+    unsigned int local_offset = 0;
+    for (unsigned j = 0; j < tid; j++){
+        if (s_digits[j] == digit){
+            local_offset++;
+        }
+    }
+    if (gid < N){
+        d_localOffsets[gid] = local_offset;
+    }
+}
+/*
+
+*/
+__global__ void scatterKernelRadix(const unsigned int* d_input,
+                                    unsigned int* d_output,
+                                    const unsigned int* d_localOffsets,
+                                    const unsigned int* d_globalOffsets,
+                                    int N, unsigned int iter, unsigned int r)
+{
+    const unsigned int numBuckets = 1 << r;
+    int tid = threadIdx.x;
+    int gid = blockIdx.x * blockDim.x + tid;
+
+    if (gid < N){
+        unsigned int key = d_input[gid];
+        unsigned int digit = (key >> (iter * r) & (numBuckets - 1));
+        
+        unsigned int block_offset = d_globalOffsets[blockIdx.x * numBuckets + digit];
+        unsigned int local_offset = d_localOffsets[gid];
+        unsigned int dest = block_offset + local_offset;    
+        //coaleased memory write
+        d_output[dest] = key;
+    }
+}
+
+void gpuRadixSortCoalescedRadix(unsigned int *d_input, int N, unsigned int r){
+    const unsigned int numBuckets = 1 << r;
+    unsigned int numPasses = (32 + r-1) / r; //assuming we work with 32-bit keys
+
+    unsigned int *d_output;
+    CUDA_CHECK(cudaMalloc((void**)&d_output, N * sizeof(unsigned int)));
+
+    unsigned int *d_localOffsets;
+    CUDA_CHECK(cudaMalloc((void**)&d_localOffsets, N * sizeof(unsigned int)));
+
+    int numBlocks = (N + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    unsigned int *d_blockHist;
+    CUDA_CHECK(cudaMalloc((void**)&d_blockHist, numBlocks * numBuckets * sizeof(unsigned int)));
+
+    // d_globalOffsets: one per block and per bucket.
+    unsigned int *d_globalOffsets;
+    CUDA_CHECK(cudaMalloc((void**)&d_globalOffsets, numBlocks * numBuckets * sizeof(unsigned int)));
+    
+    // allocate host arrays to store per-block histograms and temporarily the global offsets
+    unsigned int *h_blockHist = (unsigned int*)malloc(numBlocks * numBuckets * sizeof(unsigned int));
+    unsigned int *h_globalOffsets = (unsigned int*)malloc(numBlocks * numBuckets * sizeof(unsigned int));
+    if (!h_blockHist || !h_globalOffsets){
+        fprintf(stderr, "Failed to allocate host arrays for histogram offsets.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // allocate temporary host arrays for total counts per bucket and bucket prefix
+    unsigned int* total_bucket = (unsigned int*)malloc(numBuckets * sizeof(unsigned int));
+    unsigned int* prefix_bucket = (unsigned int*)malloc(numBuckets * sizeof(unsigned int));
+    if (!total_bucket || !prefix_bucket) {
+        fprintf(stderr, "Failed to allocate temporary host arrays.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    //shared  memoory size: numBuckets ints for histogram + BLOCK_SIZE ints for storing each thread's digit 
+    size_t sharedMemSize = numBuckets * sizeof(unsigned int) + BLOCK_SIZE * sizeof(unsigned int);
+    for (unsigned int pass = 0; pass < numPasses; pass++){
+        localScanKernelRadix<<<numBlocks, BLOCK_SIZE, sharedMemSize>>>(
+            d_input, d_localOffsets, d_blockHist, N, pass, r);
+    
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        CUDA_CHECK(cudaMemcpy(h_blockHist, d_blockHist,
+                         numBlocks*numBuckets * sizeof(unsigned int),
+                         cudaMemcpyDeviceToHost))
+    
+        //for every of 2^r buckets, iterate over all blocks and calculate the total of items for each bucket                         
+        for (unsigned int bucket = 0; bucket < numBuckets; bucket++){
+            unsigned int sum = 0;
+            for (unsigned int block = 0; block < numBlocks; block++){
+                sum += h_blockHist[block * numBuckets + bucket];
+            }
+            total_bucket[bucket] = sum;
+        }
+
+        //we want to know where each bucket starts in the global output array 
+        //we calculate an exclusive scan on all buckets; we know that first bucket starts at 0
+        prefix_bucket[0] = 0;
+        for (unsigned int bucket = 1; bucket < numBuckets; bucket++){
+            prefix_bucket[bucket] = prefix_bucket[bucket-1] + total_bucket[bucket-1];
+        }
+
+        //now for every local bucket we want to know how much should we offset it based on the global buckets order
+        for (unsigned int bucket = 0; bucket < numBuckets; bucket++){
+            unsigned int sum = 0;
+            for (unsigned int block = 0; block < numBlocks; block++){
+                h_globalOffsets[block * numBuckets + bucket] = prefix_bucket[bucket] + sum;
+                sum += h_blockHist[block * numBuckets + bucket];
+            }
+        }
+
+        CUDA_CHECK(cudaMemcpy(d_globalOffsets, h_globalOffsets,
+            numBlocks * numBuckets * sizeof(unsigned int),
+            cudaMemcpyHostToDevice));
+
+        //lanuch scatter kernel to reposition keys in the coaleased manner
+        scatterKernelRadix<<<numBlocks, BLOCK_SIZE>>>(d_input, d_output, d_localOffsets,
+                                                        d_globalOffsets, N, pass, r);
+        
+        CUDA_CHECK(cudaDeviceSynchronize());
+
+        //output becomes input in the next itertion
+        unsigned int *temp = d_input;
+        d_input = d_output;
+        d_output = temp;
+    }
+
+    CUDA_CHECK(cudaFree(d_output));
+    CUDA_CHECK(cudaFree(d_localOffsets));
+    CUDA_CHECK(cudaFree(d_blockHist));
+    CUDA_CHECK(cudaFree(d_globalOffsets));
+
+    free(h_blockHist);
+    free(h_globalOffsets);
+    free(total_bucket);
+    free(prefix_bucket);
+
+}
