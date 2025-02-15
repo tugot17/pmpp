@@ -23,8 +23,8 @@
 void gpuRadixSortThreeKernels(unsigned int *d_input, int N);
 void gpuRadixSortSingleKernel(unsigned int *d_input, int N);
 void gpuRadixSortWithMemoryCoalescing(unsigned int *d_input, int N);
-void gpuRadixSortCoalescedRadix(unsigned int *d_input, int N, unsigned int r);
-void gpuRadixSortCoalescedRadixCoarsening(unsigned int *d_input, int N, unsigned int r);
+void gpuRadixSortCoalescedMultibitRadix(unsigned int *d_input, int N, unsigned int r);
+void gpuRadixSortCoalescedMultibitRadixThreadCoarsening(unsigned int *d_input, int N, unsigned int r);
 void gpuMergeSort(float* d_input, int N);
 
 #endif // GPU_RADIX_SORT_H

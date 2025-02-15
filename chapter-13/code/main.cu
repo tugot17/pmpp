@@ -120,32 +120,34 @@ bool isSorted(unsigned int arr[], int size) {
     return true;
 }
 
-void gpuMergeSortWrapper(unsigned int* d_input, int N) {
-    gpuMergeSortUnsignedInt(d_input, N);
+// --- GPU Sort Wrappers ---
+// Naive three-kernel approach (to be labeled as Naive Parallel Radix Sort)
+void gpuRadixSortThreeKernelsWrapper(unsigned int* d_input, int N) {
+    gpuRadixSortThreeKernels(d_input, N);
 }
 
-// Added wrappers for coalesced versions (if needed)
+// Memory-coalesced versions
 void gpuRadixSortCoalescedRadixWrapper(unsigned int* d_input, int N) {
-    gpuRadixSortCoalescedRadix(d_input, N, RADIX);
+    gpuRadixSortCoalescedMultibitRadix(d_input, N, RADIX);
 }
 
 void gpuRadixSortCoalescedRadixCoarseningWrapper(unsigned int* d_input, int N) {
-    gpuRadixSortCoalescedRadixCoarsening(d_input, N, RADIX);
+    gpuRadixSortCoalescedMultibitRadixThreadCoarsening(d_input, N, RADIX);
 }
 
 // --- Helper functions for printing the performance table ---
 void printTableHeader() {
-    printf("+------------------------------------------------------+-------------+----------+\n");
-    printf("|                     Sort Method                    | Time (ms)   | Speedup  |\n");
-    printf("+------------------------------------------------------+-------------+----------+\n");
+    printf("+---------------------------------------------------------------------+-------------+----------+\n");
+    printf("|                            Sort Method                              | Time (ms)   | Speedup  |\n");
+    printf("+---------------------------------------------------------------------+-------------+----------+\n");
 }
 
 void printTableRow(const char* method, float time_ms, float cpu_time_ms) {
-    printf("| %-50s | %11.3f | %7.2fx |\n", method, time_ms, cpu_time_ms / time_ms);
+    printf("| %-67s | %11.3f | %7.2fx |\n", method, time_ms, cpu_time_ms / time_ms);
 }
 
 void printTableFooter() {
-    printf("+------------------------------------------------------+-------------+----------+\n");
+    printf("+---------------------------------------------------------------------+-------------+----------+\n");
 }
 
 int main() {
@@ -169,22 +171,22 @@ int main() {
 
     unsigned int* h_sorted = NULL;
 
-    // Benchmark: Basic three-kernel GPU radix sort
-    printf("\n=== Basic Three-Kernel GPU Radix Sort ===\n");
-    float gpu_three_kernel_ms = do_bench(gpuRadixSortThreeKernels, d_array, h_unsorted, N, warmup, reps);
-    printf("Average GPU basic three-kernel sort time: %f ms\n", gpu_three_kernel_ms);
+    // Benchmark: Naive Parallel Radix Sort (three-kernel approach)
+    printf("\n=== Naive Parallel Radix Sort ===\n");
+    float gpu_naive_ms = do_bench(gpuRadixSortThreeKernelsWrapper, d_array, h_unsorted, N, warmup, reps);
+    printf("Average GPU Naive Parallel Radix Sort time: %f ms\n", gpu_naive_ms);
 
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
     if (isSorted(h_sorted, N)) {
-        printf("Basic three-kernel GPU sort is correct.\n");
+        printf("Naive Parallel Radix Sort is correct: ✅\n");
     } else {
-        printf("Basic three-kernel GPU sort is NOT sorted correctly!\n");
+        printf("Naive Parallel Radix Sort is NOT sorted correctly: ❌\n");
     }
     free(h_sorted);
     printf("\n");
 
-    // Benchmark: Memory-coalesced GPU radix sort
+    // Benchmark: Memory-coalesced GPU sort
     printf("\n=== Memory-Coalesced GPU Radix Sort ===\n");
     float gpu_coalesced_ms = do_bench(gpuRadixSortWithMemoryCoalescing, d_array, h_unsorted, N, warmup, reps);
     printf("Average GPU memory-coalesced sort time: %f ms\n", gpu_coalesced_ms);
@@ -192,56 +194,56 @@ int main() {
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
     if (isSorted(h_sorted, N)) {
-        printf("Memory-coalesced GPU sort is correct.\n");
+        printf("Memory-coalesced GPU sort is correct: ✅\n");
     } else {
-        printf("Memory-coalesced GPU sort is NOT sorted correctly!\n");
+        printf("Memory-coalesced GPU sort is NOT sorted correctly: ❌\n");
     }
     free(h_sorted);
     printf("\n");
 
-    // Benchmark: Coalesced radix GPU sort
-    printf("\n=== Coalesced Radix GPU Sort ===\n");
+    // Benchmark: Memory-coalesced GPU sort (multiradix)
+    printf("\n=== Memory-Coalesced GPU Radix Sort (multiradix) ===\n");
     printf("Running with radix value of %d\n", RADIX);
     float gpu_coalesced_radix_ms = do_bench(gpuRadixSortCoalescedRadixWrapper, d_array, h_unsorted, N, warmup, reps);
-    printf("Average GPU coalesced radix sort time: %f ms\n", gpu_coalesced_radix_ms);
+    printf("Average GPU memory-coalesced (multiradix) sort time: %f ms\n", gpu_coalesced_radix_ms);
 
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
     if (isSorted(h_sorted, N)) {
-        printf("Coalesced radix GPU sort is correct.\n");
+        printf("Memory-coalesced (multiradix) GPU sort is correct: ✅\n");
     } else {
-        printf("Coalesced radix GPU sort is NOT sorted correctly!\n");
+        printf("Memory-coalesced (multiradix) GPU sort is NOT sorted correctly: ❌\n");
     }
     free(h_sorted);
     printf("\n");
 
-    // Benchmark: Coalesced radix coarsening GPU sort
-    printf("\n=== Coalesced Radix Coarsening GPU Sort ===\n");
-    printf("Running with radix value of %d and memory coarsening\n", RADIX);
+    // Benchmark: Memory-coalesced GPU sort (multiradix and thread coarsening)
+    printf("\n=== Memory-Coalesced GPU Radix Sort (multiradix and thread coarsening) ===\n");
+    printf("Running with radix value of %d and thread coarsening\n", RADIX);
     float gpu_coalesced_radix_coarsening_ms = do_bench(gpuRadixSortCoalescedRadixCoarseningWrapper, d_array, h_unsorted, N, warmup, reps);
-    printf("Average GPU coalesced radix coarsening sort time: %f ms\n", gpu_coalesced_radix_coarsening_ms);
+    printf("Average GPU memory-coalesced (multiradix and thread coarsening) sort time: %f ms\n", gpu_coalesced_radix_coarsening_ms);
 
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
     if (isSorted(h_sorted, N)) {
-        printf("Coalesced radix coarsening GPU sort is correct.\n");
+        printf("Memory-coalesced (multiradix and thread coarsening) GPU sort is correct: ✅\n");
     } else {
-        printf("Coalesced radix coarsening GPU sort is NOT sorted correctly!\n");
+        printf("Memory-coalesced (multiradix and thread coarsening) GPU sort is NOT sorted correctly: ❌\n");
     }
     free(h_sorted);
     printf("\n");
 
     // Benchmark: GPU merge sort
     printf("\n=== GPU Merge Sort ===\n");
-    float gpu_merge_sort_ms = do_bench(gpuMergeSortWrapper, d_array, h_unsorted, N, warmup, reps);
+    float gpu_merge_sort_ms = do_bench(gpuMergeSortUnsignedInt, d_array, h_unsorted, N, warmup, reps);
     printf("Average GPU merge sort time: %f ms\n", gpu_merge_sort_ms);
 
     h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     gpuErrchk(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));
     if (isSorted(h_sorted, N)) {
-        printf("GPU merge sort is correct.\n");
+        printf("GPU merge sort is correct: ✅\n");
     } else {
-        printf("GPU merge sort is NOT sorted correctly!\n");
+        printf("GPU merge sort is NOT sorted correctly: ❌\n");
     }
     free(h_sorted);
     printf("\n");
@@ -255,10 +257,10 @@ int main() {
     // --- Performance Summary Table ---
     printf("\n=== Performance Summary ===\n");
     printTableHeader();
-    printTableRow("Basic three-kernel GPU sort", gpu_three_kernel_ms, cpu_avg_ms);
+    printTableRow("Naive Parallel Radix Sort", gpu_naive_ms, cpu_avg_ms);
     printTableRow("Memory-coalesced GPU sort", gpu_coalesced_ms, cpu_avg_ms);
-    printTableRow("Coalesced radix GPU sort", gpu_coalesced_radix_ms, cpu_avg_ms);
-    printTableRow("Coalesced radix coarsening GPU sort", gpu_coalesced_radix_coarsening_ms, cpu_avg_ms);
+    printTableRow("Memory-coalesced GPU sort (multiradix)", gpu_coalesced_radix_ms, cpu_avg_ms);
+    printTableRow("Memory-coalesced GPU sort (multiradix and thread coarsening)", gpu_coalesced_radix_coarsening_ms, cpu_avg_ms);
     printTableRow("GPU merge sort", gpu_merge_sort_ms, cpu_avg_ms);
     printTableFooter();
 

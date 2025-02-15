@@ -178,10 +178,6 @@ bool isSorted(unsigned int arr[], int size) {
     return true;
 }
 
-void gpuRadixSortCoalescedRadix(unsigned int *d_input, int N, unsigned int r) {
-    gpuRadixSortSingleKernel(d_input, N);
-}
-
 int main() {
     int N = 100000;
     
@@ -204,9 +200,7 @@ int main() {
     CUDA_CHECK(cudaMalloc(&d_array, N * sizeof(unsigned int)));
     CUDA_CHECK(cudaMemcpy(d_array, h_unsorted, N * sizeof(unsigned int), cudaMemcpyHostToDevice));
     
-    unsigned int r = 2;
-    
-    gpuRadixSortCoalescedRadix(d_array, N, r);
+    gpuRadixSortSingleKernel(d_array, N);
     
     unsigned int* h_sorted = (unsigned int*)malloc(N * sizeof(unsigned int));
     CUDA_CHECK(cudaMemcpy(h_sorted, d_array, N * sizeof(unsigned int), cudaMemcpyDeviceToHost));

@@ -376,7 +376,7 @@ For each key in d_input we extract the digit. In shared memory we build a histog
 We also store the keys digit in the latter part of the shared memory (s_digits). Then, each thread computes the local offset, aka
 how many keys with the same digit appear before it. 
 */
-__global__ void localScanKernelRadix(const unsigned int* d_input,
+__global__ void localScanKernelMultibitRadix(const unsigned int* d_input,
                                         unsigned int* d_localOffsets,
                                         unsigned int* d_blockHist,
                                         int N, unsigned int iter, unsigned int r)
@@ -434,7 +434,7 @@ we calculate the destination by bucketPrefix[digit] (how many items in buckets b
 + per-block offset for bucket (how many items in the current block in bucket before current element) 
 + local_offset (how many same values for bit in the current block before current element)
 */
-__global__ void scatterKernelRadix(const unsigned int* d_input,
+__global__ void scatterKernelMultibitRadix(const unsigned int* d_input,
                                     unsigned int* d_output,
                                     const unsigned int* d_localOffsets,
                                     const unsigned int* d_globalOffsets,
@@ -456,7 +456,7 @@ __global__ void scatterKernelRadix(const unsigned int* d_input,
     }
 }
 
-void gpuRadixSortCoalescedRadix(unsigned int *d_input, int N, unsigned int r){
+void gpuRadixSortCoalescedMultibitRadix(unsigned int *d_input, int N, unsigned int r){
     const unsigned int numBuckets = 1 << r;
     unsigned int numPasses = (32 + r-1) / r; //assuming we work with 32-bit keys
 
@@ -493,7 +493,7 @@ void gpuRadixSortCoalescedRadix(unsigned int *d_input, int N, unsigned int r){
     //shared  memoory size: numBuckets ints for histogram + BLOCK_SIZE ints for storing each thread's digit 
     size_t sharedMemSize = numBuckets * sizeof(unsigned int) + BLOCK_SIZE * sizeof(unsigned int);
     for (unsigned int pass = 0; pass < numPasses; pass++){
-        localScanKernelRadix<<<numBlocks, BLOCK_SIZE, sharedMemSize>>>(
+        localScanKernelMultibitRadix<<<numBlocks, BLOCK_SIZE, sharedMemSize>>>(
             d_input, d_localOffsets, d_blockHist, N, pass, r);
     
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -532,7 +532,7 @@ void gpuRadixSortCoalescedRadix(unsigned int *d_input, int N, unsigned int r){
             cudaMemcpyHostToDevice));
 
         //lanuch scatter kernel to reposition keys in the coaleased manner
-        scatterKernelRadix<<<numBlocks, BLOCK_SIZE>>>(d_input, d_output, d_localOffsets,
+        scatterKernelMultibitRadix<<<numBlocks, BLOCK_SIZE>>>(d_input, d_output, d_localOffsets,
                                                         d_globalOffsets, N, pass, r);
         
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -561,7 +561,7 @@ We also store the keys' digit in the latter part of the shared memory (s_digits)
 has BLOCK_SIZE*COARSE_FACTOR entries. Then, each thread computes, for each of its keys, the local offset,
 i.e. how many keys with the same digit appear before it in block order.
 */
-__global__ void localScanKernelRadixCoarsening(const unsigned int* d_input,
+__global__ void localScanKernelMultibitRadixCoarsening(const unsigned int* d_input,
     unsigned int* d_localOffsets,
     unsigned int* d_blockHist,
     int N, unsigned int iter, unsigned int r)
@@ -640,7 +640,7 @@ Each thread processes COARSE_FACTOR keys. For each key, we use its digit to get
 the corresponding global bucket offset (from d_globalOffsets)
 and then add its computed local offset to determine the destination in d_output.
 */
-__global__ void scatterKernelRadixCoarsening(const unsigned int* d_input,
+__global__ void scatterKernelMultibitRadixThreadCoarsening(const unsigned int* d_input,
     unsigned int* d_output,
     const unsigned int* d_localOffsets,
     const unsigned int* d_globalOffsets,
@@ -667,7 +667,7 @@ __global__ void scatterKernelRadixCoarsening(const unsigned int* d_input,
 }
 
 
-void gpuRadixSortCoalescedRadixCoarsening(unsigned int *d_input, int N, unsigned int r) {
+void gpuRadixSortCoalescedMultibitRadixThreadCoarsening(unsigned int *d_input, int N, unsigned int r) {
     const unsigned int numBuckets = 1 << r;
     unsigned int numPasses = (32 + r - 1) / r; // for 32-bit keys
 
@@ -706,7 +706,7 @@ void gpuRadixSortCoalescedRadixCoarsening(unsigned int *d_input, int N, unsigned
     size_t sharedMemSize = numBuckets * sizeof(unsigned int) + (BLOCK_SIZE * COARSE_FACTOR) * sizeof(unsigned int);
 
     for (unsigned int pass = 0; pass < numPasses; pass++) {
-        localScanKernelRadixCoarsening<<<numBlocks, BLOCK_SIZE, sharedMemSize>>>(
+        localScanKernelMultibitRadixCoarsening<<<numBlocks, BLOCK_SIZE, sharedMemSize>>>(
             d_input, d_localOffsets, d_blockHist, N, pass, r);
     
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -744,7 +744,7 @@ void gpuRadixSortCoalescedRadixCoarsening(unsigned int *d_input, int N, unsigned
             cudaMemcpyHostToDevice));
 
         // Launch scatter kernel.
-        scatterKernelRadixCoarsening<<<numBlocks, BLOCK_SIZE>>>(d_input, d_output, d_localOffsets,
+        scatterKernelMultibitRadixThreadCoarsening<<<numBlocks, BLOCK_SIZE>>>(d_input, d_output, d_localOffsets,
                                                        d_globalOffsets, N, pass, r);
         
         CUDA_CHECK(cudaDeviceSynchronize());
