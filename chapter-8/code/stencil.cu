@@ -7,8 +7,11 @@
 #include <vector>
 #include <functional>
 
-#define OUT_TILE_DIM 2
-#define IN_TILE_DIM (OUT_TILE_DIM+2)
+//some of our kernels have qubic requirement for the shared memory, other have squared, hence we introduce two block sizes
+#define OUT_TILE_DIM_SMALL 8
+#define IN_TILE_DIM_SMALL (OUT_TILE_DIM_SMALL+2)
+#define OUT_TILE_DIM_BIG 30
+#define IN_TILE_DIM_BIG (OUT_TILE_DIM_BIG+2)
 
 int c0 = 0;
 int c1 = 1;
@@ -110,7 +113,7 @@ void stencil_3d_parallel_basic(float* in, float* out, unsigned int N,
         return;
     }
 
-    dim3 dimBlock(OUT_TILE_DIM, OUT_TILE_DIM, OUT_TILE_DIM);
+    dim3 dimBlock(OUT_TILE_DIM_SMALL, OUT_TILE_DIM_SMALL, OUT_TILE_DIM_SMALL);
     dim3 dimGrid(cdiv(N, dimBlock.x), cdiv(N, dimBlock.y), cdiv(N, dimBlock.z));
 
     stencil_kernel<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
@@ -132,17 +135,17 @@ void stencil_3d_parallel_basic(float* in, float* out, unsigned int N,
 
 __global__ void stencil_kernel_shared_memory(float* in, float* out, unsigned int N,
                                            int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
-    int i = blockIdx.z*OUT_TILE_DIM + threadIdx.z - 1;
-    int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
-    int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
-    __shared__ float in_s[IN_TILE_DIM][IN_TILE_DIM][IN_TILE_DIM];
+    int i = blockIdx.z*OUT_TILE_DIM_SMALL+ threadIdx.z - 1;
+    int j = blockIdx.y*OUT_TILE_DIM_SMALL+ threadIdx.y - 1;
+    int k = blockIdx.x*OUT_TILE_DIM_SMALL+ threadIdx.x - 1;
+    __shared__ float in_s[IN_TILE_DIM_SMALL][IN_TILE_DIM_SMALL][IN_TILE_DIM_SMALL];
     if(i >= 0 && i < N && j >= 0 && j < N && k >= 0 && k < N) {
         in_s[threadIdx.z][threadIdx.y][threadIdx.x] = in[i*N*N + j*N + k];
     }
     __syncthreads();
     if(i >= 1 && i < N-1 && j >= 1 && j < N-1 && k >= 1 && k < N-1) {
-        if(threadIdx.z >= 1 && threadIdx.z < IN_TILE_DIM-1 && threadIdx.y >= 1
-           && threadIdx.y<IN_TILE_DIM-1 && threadIdx.x>=1 && threadIdx.x<IN_TILE_DIM-1) {
+        if(threadIdx.z >= 1 && threadIdx.z < IN_TILE_DIM_SMALL-1 && threadIdx.y >= 1
+           && threadIdx.y<IN_TILE_DIM_SMALL-1 && threadIdx.x>=1 && threadIdx.x<IN_TILE_DIM_SMALL-1) {
             out[i*N*N + j*N + k] = c0*in_s[threadIdx.z][threadIdx.y][threadIdx.x]
                                  + c1*in_s[threadIdx.z][threadIdx.y][threadIdx.x-1]
                                  + c2*in_s[threadIdx.z][threadIdx.y][threadIdx.x+1]
@@ -177,8 +180,8 @@ void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N,
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);
-    dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
+    dim3 dimBlock(IN_TILE_DIM_SMALL, IN_TILE_DIM_SMALL, IN_TILE_DIM_SMALL);
+    dim3 dimGrid(cdiv(N, OUT_TILE_DIM_SMALL), cdiv(N, OUT_TILE_DIM_SMALL), cdiv(N, OUT_TILE_DIM_SMALL));
 
     stencil_kernel_shared_memory<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 
@@ -199,12 +202,12 @@ void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N,
 
 __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned int N,
                                                 int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
-    int iStart = blockIdx.z*OUT_TILE_DIM;
-    int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
-    int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
-    __shared__ float inPrev_s[IN_TILE_DIM][IN_TILE_DIM];
-    __shared__ float inCurr_s[IN_TILE_DIM][IN_TILE_DIM];
-    __shared__ float inNext_s[IN_TILE_DIM][IN_TILE_DIM];
+    int iStart = blockIdx.z*OUT_TILE_DIM_BIG;
+    int j = blockIdx.y*OUT_TILE_DIM_BIG+ threadIdx.y - 1;
+    int k = blockIdx.x*OUT_TILE_DIM_BIG+ threadIdx.x - 1;
+    __shared__ float inPrev_s[IN_TILE_DIM_BIG][IN_TILE_DIM_BIG];
+    __shared__ float inCurr_s[IN_TILE_DIM_BIG][IN_TILE_DIM_BIG];
+    __shared__ float inNext_s[IN_TILE_DIM_BIG][IN_TILE_DIM_BIG];
     
     // Initialize shared memory
     inPrev_s[threadIdx.y][threadIdx.x] = 0.0f;
@@ -217,15 +220,15 @@ __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned
     if(iStart >= 0 && iStart < N && j >= 0 && j < N && k >= 0 && k < N) {
         inCurr_s[threadIdx.y][threadIdx.x] = in[iStart*N*N + j*N + k];
     }
-    for(int i = iStart; i < iStart + OUT_TILE_DIM; ++i) {
+    for(int i = iStart; i < iStart + OUT_TILE_DIM_BIG; ++i) {
         inNext_s[threadIdx.y][threadIdx.x] = 0.0f;
         if(i + 1 >= 0 && i + 1 < N && j >= 0 && j < N && k >= 0 && k < N) {
             inNext_s[threadIdx.y][threadIdx.x] = in[(i + 1)*N*N + j*N + k];
         }
         __syncthreads();
         if(i >= 1 && i < N - 1 && j >= 1 && j < N - 1 && k >= 1 && k < N - 1) {
-            if(threadIdx.y >= 1 && threadIdx.y < IN_TILE_DIM - 1
-               && threadIdx.x >= 1 && threadIdx.x < IN_TILE_DIM - 1) {
+            if(threadIdx.y >= 1 && threadIdx.y < IN_TILE_DIM_BIG - 1
+               && threadIdx.x >= 1 && threadIdx.x < IN_TILE_DIM_BIG - 1) {
                 out[i*N*N + j*N + k] = c0*inCurr_s[threadIdx.y][threadIdx.x]
                                      + c1*inCurr_s[threadIdx.y][threadIdx.x-1]
                                      + c2*inCurr_s[threadIdx.y][threadIdx.x+1]
@@ -264,8 +267,8 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, 1);
-    dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
+    dim3 dimBlock(IN_TILE_DIM_BIG, IN_TILE_DIM_BIG, 1);
+    dim3 dimGrid(cdiv(N, OUT_TILE_DIM_BIG), cdiv(N, OUT_TILE_DIM_BIG), cdiv(N, OUT_TILE_DIM_BIG));
 
     stencil_kernel_thread_coarsening<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 
@@ -286,11 +289,11 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
 
 __global__ void stencil_kernel_register_tiling(float* in, float* out, unsigned int N,
                                               int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
-   int iStart = blockIdx.z*OUT_TILE_DIM;
-   int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
-   int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
+   int iStart = blockIdx.z*OUT_TILE_DIM_SMALL;
+   int j = blockIdx.y*OUT_TILE_DIM_SMALL+ threadIdx.y - 1;
+   int k = blockIdx.x*OUT_TILE_DIM_SMALL+ threadIdx.x - 1;
    float inPrev;
-   __shared__ float inCurr_s[IN_TILE_DIM][IN_TILE_DIM];
+   __shared__ float inCurr_s[IN_TILE_DIM_SMALL][IN_TILE_DIM_SMALL];
    float inCurr;
    float inNext;
    if(iStart-1 >= 0 && iStart-1 < N && j >= 0 && j < N && k >= 0 && k < N) {
@@ -302,15 +305,15 @@ __global__ void stencil_kernel_register_tiling(float* in, float* out, unsigned i
        inCurr_s[threadIdx.y][threadIdx.x] = inCurr;
    }
    
-   for(int i = iStart; i < iStart + OUT_TILE_DIM; ++i) {
+   for(int i = iStart; i < iStart + OUT_TILE_DIM_SMALL; ++i) {
        if(i + 1 >= 0 && i + 1 < N && j >= 0 && j < N && k >= 0 && k < N) {
            inNext = in[(i + 1)*N*N + j*N + k];
        }
        
        __syncthreads();
        if(i >= 1 && i < N - 1 && j >= 1 && j < N - 1 && k >= 1 && k < N - 1) {
-           if(threadIdx.y >= 1 && threadIdx.y < IN_TILE_DIM - 1
-              && threadIdx.x >= 1 && threadIdx.x < IN_TILE_DIM - 1) {
+           if(threadIdx.y >= 1 && threadIdx.y < IN_TILE_DIM_SMALL - 1
+              && threadIdx.x >= 1 && threadIdx.x < IN_TILE_DIM_SMALL - 1) {
                out[i*N*N + j*N + k] = c0*inCurr
                                     + c1*inCurr_s[threadIdx.y][threadIdx.x-1]
                                     + c2*inCurr_s[threadIdx.y][threadIdx.x+1]
@@ -350,8 +353,8 @@ void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N,
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, 1);
-    dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
+    dim3 dimBlock(IN_TILE_DIM_SMALL, IN_TILE_DIM_SMALL, 1);
+    dim3 dimGrid(cdiv(N, OUT_TILE_DIM_SMALL), cdiv(N, OUT_TILE_DIM_SMALL), cdiv(N, OUT_TILE_DIM_SMALL));
 
     stencil_kernel_register_tiling<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 
@@ -510,37 +513,26 @@ int main(int argc, char const* argv[]) {
         printf("Grid size: %dx%dx%d\n", N, N, N);
         printf("Total elements: %u\n", total_size);
         printf("Memory per array: %.2f MB\n", (total_size * sizeof(float)) / (1024.0f * 1024.0f));
-        printf("OUT_TILE_DIM: %d, IN_TILE_DIM: %d\n\n", OUT_TILE_DIM, IN_TILE_DIM);
+        printf("OUT_TILE_DIM: %d, IN_TILE_DIM: %d\n\n", OUT_TILE_DIM_SMALL, OUT_TILE_DIM_SMALL);
 
-        // Store results
         std::vector<BenchmarkResult> results;
         
-        // Benchmark sequential implementation
-        printf("Benchmarking sequential implementation...\n");
         float sequential_time = benchmark_stencil_sequential(stencil_3d_sequential, in, out_sequential, N, 
                                                            c0, c1, c2, c3, c4, c5, c6);
         results.push_back({"Sequential", sequential_time, out_sequential});
         
-        // Benchmark parallel basic implementation
-        printf("Benchmarking parallel basic implementation...\n");
         float basic_time = benchmark_stencil(stencil_3d_parallel_basic, in, out_basic, N, 
                                            c0, c1, c2, c3, c4, c5, c6);
         results.push_back({"Parallel Basic", basic_time, out_basic});
         
-        // Benchmark shared memory implementation
-        printf("Benchmarking shared memory implementation...\n");
         float shared_time = benchmark_stencil(stencil_3d_parallel_shared_memory, in, out_shared, N, 
                                             c0, c1, c2, c3, c4, c5, c6);
         results.push_back({"Shared Memory", shared_time, out_shared});
         
-        // Benchmark thread coarsening implementation
-        printf("Benchmarking thread coarsening implementation...\n");
         float coarsening_time = benchmark_stencil(stencil_3d_parallel_thread_coarsening, in, out_coarsening, N, 
                                                 c0, c1, c2, c3, c4, c5, c6);
         results.push_back({"Thread Coarsening", coarsening_time, out_coarsening});
         
-        // Benchmark register tiling implementation
-        printf("Benchmarking register tiling implementation...\n");
         float register_time = benchmark_stencil(stencil_3d_parallel_register_tiling, in, out_register, N, 
                                               c0, c1, c2, c3, c4, c5, c6);
         results.push_back({"Register Tiling", register_time, out_register});
@@ -568,21 +560,6 @@ int main(int argc, char const* argv[]) {
         
         printf("\nOverall correctness: %s\n", all_correct ? "✓ All implementations correct" : "✗ Some implementations incorrect");
 
-        // Calculate throughput
-        printf("\nThroughput Analysis:\n");
-        unsigned long long operations_per_point = 7;  // 7 coefficients
-        unsigned long long total_operations = (N-2) * (N-2) * (N-2) * operations_per_point;
-        
-        printf("Operations per interior point: %llu\n", operations_per_point);
-        printf("Interior points: %d\n", (N-2) * (N-2) * (N-2));
-        printf("Total operations: %llu\n", total_operations);
-        
-        for (const auto& result : results) {
-            double gflops = (total_operations / 1e9) / (result.time_ms / 1000.0);
-            printf("%s: %.2f GFLOP/s\n", result.name, gflops);
-        }
-
-        // Cleanup
         free(in);
         free(out_sequential);
         free(out_basic);
