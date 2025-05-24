@@ -4,6 +4,9 @@
 #include <string.h>
 #include <time.h>
 #include <iostream>
+#include <vector>
+#include <functional>
+
 #define OUT_TILE_DIM 2
 #define IN_TILE_DIM (OUT_TILE_DIM+2)
 
@@ -14,6 +17,37 @@ int c3 = 1;
 int c4 = 1;
 int c5 = 1;
 int c6 = 1;
+
+#define CUDA_CHECK(call)                                                                                 \
+    do {                                                                                                 \
+        cudaError_t error = call;                                                                        \
+        if (error != cudaSuccess) {                                                                      \
+            fprintf(stderr, "CUDA error at %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(error)); \
+            exit(EXIT_FAILURE);                                                                          \
+        }                                                                                                \
+    } while (0)
+
+#define gpuErrchk(ans) \
+    { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char* file, int line, bool abort = true) {
+    if (code != cudaSuccess) {
+        fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+        if (abort) {
+            exit(code);
+        }
+    }
+}
+
+void clear_l2() {
+    static int l2_clear_size = 0;
+    static unsigned char* gpu_scratch_l2_clear = NULL;
+    if (!gpu_scratch_l2_clear) {
+        cudaDeviceGetAttribute(&l2_clear_size, cudaDevAttrL2CacheSize, 0);
+        l2_clear_size *= 2;
+        gpuErrchk(cudaMalloc(&gpu_scratch_l2_clear, l2_clear_size));
+    }
+    gpuErrchk(cudaMemset(gpu_scratch_l2_clear, 0, l2_clear_size));
+}
 
 inline unsigned int cdiv(unsigned int a, unsigned int b) {
     return (a + b - 1) / b;
@@ -171,6 +205,12 @@ __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned
     __shared__ float inPrev_s[IN_TILE_DIM][IN_TILE_DIM];
     __shared__ float inCurr_s[IN_TILE_DIM][IN_TILE_DIM];
     __shared__ float inNext_s[IN_TILE_DIM][IN_TILE_DIM];
+    
+    // Initialize shared memory
+    inPrev_s[threadIdx.y][threadIdx.x] = 0.0f;
+    inCurr_s[threadIdx.y][threadIdx.x] = 0.0f;
+    inNext_s[threadIdx.y][threadIdx.x] = 0.0f;
+    
     if(iStart-1 >= 0 && iStart-1 < N && j >= 0 && j < N && k >= 0 && k < N) {
         inPrev_s[threadIdx.y][threadIdx.x] = in[(iStart - 1)*N*N + j*N + k];
     }
@@ -178,6 +218,7 @@ __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned
         inCurr_s[threadIdx.y][threadIdx.x] = in[iStart*N*N + j*N + k];
     }
     for(int i = iStart; i < iStart + OUT_TILE_DIM; ++i) {
+        inNext_s[threadIdx.y][threadIdx.x] = 0.0f;
         if(i + 1 >= 0 && i + 1 < N && j >= 0 && j < N && k >= 0 && k < N) {
             inNext_s[threadIdx.y][threadIdx.x] = in[(i + 1)*N*N + j*N + k];
         }
@@ -188,8 +229,8 @@ __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned
                 out[i*N*N + j*N + k] = c0*inCurr_s[threadIdx.y][threadIdx.x]
                                      + c1*inCurr_s[threadIdx.y][threadIdx.x-1]
                                      + c2*inCurr_s[threadIdx.y][threadIdx.x+1]
-                                     + c3*inCurr_s[threadIdx.y+1][threadIdx.x]
-                                     + c4*inCurr_s[threadIdx.y-1][threadIdx.x]
+                                     + c3*inCurr_s[threadIdx.y-1][threadIdx.x]
+                                     + c4*inCurr_s[threadIdx.y+1][threadIdx.x]
                                      + c5*inPrev_s[threadIdx.y][threadIdx.x]
                                      + c6*inNext_s[threadIdx.y][threadIdx.x];
             }
@@ -223,7 +264,7 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, 1);
     dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 
     stencil_kernel_thread_coarsening<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
@@ -309,7 +350,7 @@ void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N,
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, 1);
     dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 
     stencil_kernel_register_tiling<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
@@ -329,18 +370,6 @@ void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N,
     cudaFree(d_out);
 }
 
-
-void print_3d_slice(float* data, int N, int slice_i) {
-    printf("Slice i=%d:\n", slice_i);
-    for (int j = 0; j < N; j++) {
-        for (int k = 0; k < N; k++) {
-            printf("%6.1f ", data[slice_i * N * N + j * N + k]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
-
 bool arrays_allclose(float* a, float* b, unsigned int size, 
                      float rtol = 1e-5f, float atol = 1e-8f) {
     for (unsigned int i = 0; i < size; i++) {
@@ -348,7 +377,6 @@ bool arrays_allclose(float* a, float* b, unsigned int size,
         float tolerance = atol + rtol * fmax(fabs(a[i]), fabs(b[i]));
         
         if (diff > tolerance) {
-            // Optional: print first mismatch for debugging
             printf("Mismatch at index %u: a[%u] = %f, b[%u] = %f, diff = %f, tolerance = %f\n", 
                    i, i, a[i], i, b[i], diff, tolerance);
             return false;
@@ -357,70 +385,211 @@ bool arrays_allclose(float* a, float* b, unsigned int size,
     return true;
 }
 
-int main() {
-    // Test with a small 7x7x7 grid
-    unsigned int N = 7;
-    int total_size = N * N * N;
-    
-    // Allocate memory for input and separate outputs
-    float* in = (float*)malloc(total_size * sizeof(float));
-    float* out_sequential = (float*)malloc(total_size * sizeof(float));
-    float* out_parallel = (float*)malloc(total_size * sizeof(float));
-    
-    // Initialize input data with simple pattern
-    memset(in, 0, total_size * sizeof(float));
-    memset(out_sequential, 0, total_size * sizeof(float));
-    memset(out_parallel, 0, total_size * sizeof(float));
-    
-    // Put a "hot spot" in the center
-    in[1 * N * N + 1 * N + 1] = 10.0f;  // Center point
-    in[1 * N * N + 1 * N + 2] = 5.0f;   // Adjacent points
-    in[1 * N * N + 2 * N + 1] = 5.0f;
-    in[2 * N * N + 1 * N + 1] = 5.0f;
-    
-    printf("Input data:\n");
-    for (int i = 0; i < N; i++) {
-        print_3d_slice(in, N, i);
+float* generate_random_3d_data(unsigned int N, unsigned int seed = 42) {
+    float* data = (float*)malloc(N * N * N * sizeof(float));
+    if (data == NULL) {
+        printf("Memory allocation failed!\n");
+        return NULL;
     }
-    
-    // Run both versions with separate output arrays
-    stencil_3d_sequential(in, out_sequential, N, c0, c1, c2, c3, c4, c5, c6);
-    stencil_3d_parallel_register_tiling(in, out_parallel, N, c0, c1, c2, c3, c4, c5, c6);
-    
-    printf("Sequential output:\n");
-    for (int i = 0; i < N; i++) {
-        print_3d_slice(out_sequential, N, i);
+
+    srand(seed);
+    for (unsigned int i = 0; i < N * N * N; i++) {
+        data[i] = ((float)rand() / RAND_MAX) * 100.0f;  // Random values between 0-100
     }
+    return data;
+}
+
+// Benchmark function for stencil operations
+float benchmark_stencil(void (*func)(float*, float*, unsigned int, int, int, int, int, int, int, int), 
+                       float* in, float* out, unsigned int N,
+                       int c0, int c1, int c2, int c3, int c4, int c5, int c6,
+                       int warmup = 5, int reps = 20) {
+    unsigned int total_size = N * N * N;
     
-    printf("Parallel output:\n");
-    for (int i = 0; i < N; i++) {
-        print_3d_slice(out_parallel, N, i);
+    // Warmup runs
+    for (int i = 0; i < warmup; ++i) {
+        memset(out, 0, total_size * sizeof(float));
+        func(in, out, N, c0, c1, c2, c3, c4, c5, c6);
     }
-    
-    // Compare the results
-    printf("Comparison:\n");
-    if (arrays_allclose(out_sequential, out_parallel, total_size)) {
-        printf("✓ Sequential and parallel results match!\n");
-    } else {
-        printf("✗ Sequential and parallel results differ!\n");
+
+    cudaEvent_t iterStart, iterStop;
+    cudaEventCreate(&iterStart);
+    cudaEventCreate(&iterStop);
+
+    float totalTime_ms = 0.0f;
+
+    for (int i = 0; i < reps; ++i) {
+        clear_l2();
+        memset(out, 0, total_size * sizeof(float));
         
-        // Print detailed comparison for debugging
-        printf("\nDetailed comparison:\n");
-        printf("Index    Sequential    Parallel      Difference\n");
-        printf("--------------------------------------------\n");
-        for (int i = 0; i < total_size; i++) {
-            float diff = fabs(out_sequential[i] - out_parallel[i]);
-            if (diff > 1e-5f) {  // Only print differences
-                printf("%5d    %10.6f    %10.6f    %10.6f\n", 
-                       i, out_sequential[i], out_parallel[i], diff);
-            }
-        }
+        cudaEventRecord(iterStart);
+        func(in, out, N, c0, c1, c2, c3, c4, c5, c6);
+        cudaEventRecord(iterStop);
+        cudaEventSynchronize(iterStop);
+
+        float iterTime = 0.0f;
+        cudaEventElapsedTime(&iterTime, iterStart, iterStop);
+        totalTime_ms += iterTime;
     }
+
+    cudaEventDestroy(iterStart);
+    cudaEventDestroy(iterStop);
+
+    return totalTime_ms / reps;
+}
+
+// Special benchmark function for sequential (CPU) implementation
+float benchmark_stencil_sequential(void (*func)(float*, float*, unsigned int, int, int, int, int, int, int, int), 
+                                  float* in, float* out, unsigned int N,
+                                  int c0, int c1, int c2, int c3, int c4, int c5, int c6,
+                                  int warmup = 2, int reps = 5) {
+    unsigned int total_size = N * N * N;
     
-    // Clean up
-    free(in);
-    free(out_sequential);
-    free(out_parallel);
+    // Warmup runs
+    for (int i = 0; i < warmup; ++i) {
+        memset(out, 0, total_size * sizeof(float));
+        func(in, out, N, c0, c1, c2, c3, c4, c5, c6);
+    }
+
+    struct timespec start, end;
+    double totalTime_ms = 0.0;
+
+    for (int i = 0; i < reps; ++i) {
+        memset(out, 0, total_size * sizeof(float));
+        
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        func(in, out, N, c0, c1, c2, c3, c4, c5, c6);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+
+        double iterTime = (end.tv_sec - start.tv_sec) * 1000.0 + 
+                         (end.tv_nsec - start.tv_nsec) / 1000000.0;
+        totalTime_ms += iterTime;
+    }
+
+    return totalTime_ms / reps;
+}
+
+struct BenchmarkResult {
+    const char* name;
+    float time_ms;
+    float* output;
+};
+
+int main(int argc, char const* argv[]) {
+    // Use different sizes for testing
+    std::vector<unsigned int> test_sizes = {32, 64, 128};
     
+    for (unsigned int N : test_sizes) {
+        printf("\n================================================================================\n");
+        printf("Benchmarking 3D Stencil Operations - Grid Size: %dx%dx%d\n", N, N, N);
+        printf("================================================================================\n");
+        
+        unsigned int total_size = N * N * N;
+        
+        // Allocate memory for input and outputs
+        float* in = generate_random_3d_data(N);
+        if (in == NULL) {
+            printf("Failed to generate input data\n");
+            continue;
+        }
+        
+        // Allocate separate output arrays for each implementation
+        float* out_sequential = (float*)malloc(total_size * sizeof(float));
+        float* out_basic = (float*)malloc(total_size * sizeof(float));
+        float* out_shared = (float*)malloc(total_size * sizeof(float));
+        float* out_coarsening = (float*)malloc(total_size * sizeof(float));
+        float* out_register = (float*)malloc(total_size * sizeof(float));
+        
+        if (!out_sequential || !out_basic || !out_shared || !out_coarsening || !out_register) {
+            printf("Memory allocation failed!\n");
+            free(in);
+            continue;
+        }
+
+        printf("Configuration:\n");
+        printf("Grid size: %dx%dx%d\n", N, N, N);
+        printf("Total elements: %u\n", total_size);
+        printf("Memory per array: %.2f MB\n", (total_size * sizeof(float)) / (1024.0f * 1024.0f));
+        printf("OUT_TILE_DIM: %d, IN_TILE_DIM: %d\n\n", OUT_TILE_DIM, IN_TILE_DIM);
+
+        // Store results
+        std::vector<BenchmarkResult> results;
+        
+        // Benchmark sequential implementation
+        printf("Benchmarking sequential implementation...\n");
+        float sequential_time = benchmark_stencil_sequential(stencil_3d_sequential, in, out_sequential, N, 
+                                                           c0, c1, c2, c3, c4, c5, c6);
+        results.push_back({"Sequential", sequential_time, out_sequential});
+        
+        // Benchmark parallel basic implementation
+        printf("Benchmarking parallel basic implementation...\n");
+        float basic_time = benchmark_stencil(stencil_3d_parallel_basic, in, out_basic, N, 
+                                           c0, c1, c2, c3, c4, c5, c6);
+        results.push_back({"Parallel Basic", basic_time, out_basic});
+        
+        // Benchmark shared memory implementation
+        printf("Benchmarking shared memory implementation...\n");
+        float shared_time = benchmark_stencil(stencil_3d_parallel_shared_memory, in, out_shared, N, 
+                                            c0, c1, c2, c3, c4, c5, c6);
+        results.push_back({"Shared Memory", shared_time, out_shared});
+        
+        // Benchmark thread coarsening implementation
+        printf("Benchmarking thread coarsening implementation...\n");
+        float coarsening_time = benchmark_stencil(stencil_3d_parallel_thread_coarsening, in, out_coarsening, N, 
+                                                c0, c1, c2, c3, c4, c5, c6);
+        results.push_back({"Thread Coarsening", coarsening_time, out_coarsening});
+        
+        // Benchmark register tiling implementation
+        printf("Benchmarking register tiling implementation...\n");
+        float register_time = benchmark_stencil(stencil_3d_parallel_register_tiling, in, out_register, N, 
+                                              c0, c1, c2, c3, c4, c5, c6);
+        results.push_back({"Register Tiling", register_time, out_register});
+
+        printf("\nResults:\n");
+        printf("Implementation           | Time (ms) | Speedup vs Sequential | Speedup vs Basic\n");
+        printf("-------------------------|-----------|----------------------|------------------\n");
+        
+        for (const auto& result : results) {
+            float speedup_vs_seq = sequential_time / result.time_ms;
+            float speedup_vs_basic = basic_time / result.time_ms;
+            printf("%-23s | %8.3f  | %19.2fx | %15.2fx\n", 
+                   result.name, result.time_ms, speedup_vs_seq, speedup_vs_basic);
+        }
+
+        // Verify correctness - compare all results against sequential
+        printf("\nCorrectness Verification:\n");
+        bool all_correct = true;
+        
+        for (size_t i = 1; i < results.size(); i++) {
+            bool correct = arrays_allclose(out_sequential, results[i].output, total_size);
+            printf("%s vs Sequential: %s\n", results[i].name, correct ? "✓ PASS" : "✗ FAIL");
+            if (!correct) all_correct = false;
+        }
+        
+        printf("\nOverall correctness: %s\n", all_correct ? "✓ All implementations correct" : "✗ Some implementations incorrect");
+
+        // Calculate throughput
+        printf("\nThroughput Analysis:\n");
+        unsigned long long operations_per_point = 7;  // 7 coefficients
+        unsigned long long total_operations = (N-2) * (N-2) * (N-2) * operations_per_point;
+        
+        printf("Operations per interior point: %llu\n", operations_per_point);
+        printf("Interior points: %d\n", (N-2) * (N-2) * (N-2));
+        printf("Total operations: %llu\n", total_operations);
+        
+        for (const auto& result : results) {
+            double gflops = (total_operations / 1e9) / (result.time_ms / 1000.0);
+            printf("%s: %.2f GFLOP/s\n", result.name, gflops);
+        }
+
+        // Cleanup
+        free(in);
+        free(out_sequential);
+        free(out_basic);
+        free(out_shared);
+        free(out_coarsening);
+        free(out_register);
+    }
+
     return 0;
 }
