@@ -239,6 +239,90 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
     cudaFree(d_out);
 }
 
+__global__ void stencil_kernel_register_tiling(float* in, float* out, unsigned int N) {
+   int iStart = blockIdx.z*OUT_TILE_DIM;
+   int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
+   int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
+   float inPrev;
+   __shared__ float inCurr_s[IN_TILE_DIM][IN_TILE_DIM];
+   float inCurr;
+   float inNext;
+   if(iStart-1 >= 0 && iStart-1 < N && j >= 0 && j < N && k >= 0 && k < N) {
+       inPrev = in[(iStart - 1)*N*N + j*N + k];
+   }
+   
+   if(iStart >= 0 && iStart < N && j >= 0 && j < N && k >= 0 && k < N) {
+       inCurr = in[iStart*N*N + j*N + k];
+       inCurr_s[threadIdx.y][threadIdx.x] = inCurr;
+   }
+   
+   for(int i = iStart; i < iStart + OUT_TILE_DIM; ++i) {
+       if(i + 1 >= 0 && i + 1 < N && j >= 0 && j < N && k >= 0 && k < N) {
+           inNext = in[(i + 1)*N*N + j*N + k];
+       }
+       
+       __syncthreads();
+       if(i >= 1 && i < N - 1 && j >= 1 && j < N - 1 && k >= 1 && k < N - 1) {
+           if(threadIdx.y >= 1 && threadIdx.y < IN_TILE_DIM - 1
+              && threadIdx.x >= 1 && threadIdx.x < IN_TILE_DIM - 1) {
+               out[i*N*N + j*N + k] = d_c0*inCurr
+                                    + d_c1*inCurr_s[threadIdx.y][threadIdx.x-1]
+                                    + d_c2*inCurr_s[threadIdx.y][threadIdx.x+1]
+                                    + d_c3*inCurr_s[threadIdx.y+1][threadIdx.x]
+                                    + d_c4*inCurr_s[threadIdx.y-1][threadIdx.x]
+                                    + d_c5*inPrev
+                                    + d_c6*inNext;
+           }
+       }
+       __syncthreads();
+       inPrev = inCurr;
+       inCurr = inNext;
+       inCurr_s[threadIdx.y][threadIdx.x] = inNext;
+   }
+}
+
+void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N){
+    float *d_in, *d_out;
+    cudaError_t error;
+
+    error = cudaMalloc((void**)&d_in, N*N*N * sizeof(float));
+    if (error != cudaSuccess) {
+        std::cout << "cudaMalloc d_in failed: " << cudaGetErrorString(error) << std::endl;
+        return;
+    }
+
+    error = cudaMalloc((void**)&d_out, N*N*N * sizeof(float));
+    if (error != cudaSuccess) {
+        std::cout << "cudaMalloc d_out failed: " << cudaGetErrorString(error) << std::endl;
+        return;
+    }
+
+    error = cudaMemcpy(d_in, in, N * N * N * sizeof(float), cudaMemcpyHostToDevice);
+    if (error != cudaSuccess) {
+        std::cout << "cudaMemcpy to device failed: " << cudaGetErrorString(error) << std::endl;
+        return;
+    }
+
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);  // Was OUT_TILE_DIM
+    dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
+
+    stencil_kernel_register_tiling<<<dimGrid, dimBlock>>>(d_in, d_out, N);
+
+    error = cudaGetLastError();
+    if (error != cudaSuccess) {
+        std::cout << "Kernel launch failed: " << cudaGetErrorString(error) << std::endl;
+    }
+    cudaDeviceSynchronize();
+
+    error = cudaMemcpy(out, d_out, N * N * N * sizeof(float), cudaMemcpyDeviceToHost);
+    if (error != cudaSuccess) {
+        std::cout << "cudaMemcpy to host failed: " << cudaGetErrorString(error) << std::endl;
+    }
+
+    cudaFree(d_in);
+    cudaFree(d_out);
+}
+
 
 void print_3d_slice(float* data, int N, int slice_i) {
     printf("Slice i=%d:\n", slice_i);
@@ -303,7 +387,7 @@ int main() {
     
     // Run both versions with separate output arrays
     stencil_3d_sequential(in, out_sequential, N);
-    stencil_3d_parallel_thread_coarsening(in, out_parallel, N);
+    stencil_3d_parallel_register_tiling(in, out_parallel, N);
     
     printf("Sequential output:\n");
     for (int i = 0; i < N; i++) {
