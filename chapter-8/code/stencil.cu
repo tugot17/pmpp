@@ -15,14 +15,12 @@ int c4 = 1;
 int c5 = 1;
 int c6 = 1;
 
-__constant__ int d_c0, d_c1, d_c2, d_c3, d_c4, d_c5, d_c6;
-
-
 inline unsigned int cdiv(unsigned int a, unsigned int b) {
     return (a + b - 1) / b;
 }
 
-void stencil_3d_sequential(float* in, float* out, unsigned int N) {
+void stencil_3d_sequential(float* in, float* out, unsigned int N, 
+                          int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
     for (int i = 1; i < N - 1; i++) {
         for (int j = 1; j < N - 1; j++) {
             for (int k = 1; k < N - 1; k++) {
@@ -39,22 +37,24 @@ void stencil_3d_sequential(float* in, float* out, unsigned int N) {
     }
 }
 
-__global__ void stencil_kernel(float* in, float* out, unsigned int N) {
+__global__ void stencil_kernel(float* in, float* out, unsigned int N,
+                              int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
     unsigned int i = blockIdx.z*blockDim.z + threadIdx.z;
     unsigned int j = blockIdx.y*blockDim.y + threadIdx.y;
     unsigned int k = blockIdx.x*blockDim.x + threadIdx.x;
     if (i >= 1 && i < N - 1 && j >= 1 && j < N - 1 && k >= 1 && k < N - 1) {
-        out[i*N*N + j*N + k] = d_c0*in[i*N*N + j*N + k]
-                             + d_c1*in[i*N*N + j*N + (k - 1)]
-                             + d_c2*in[i*N*N + j*N + (k + 1)]
-                             + d_c3*in[i*N*N + (j - 1)*N + k]
-                             + d_c4*in[i*N*N + (j + 1)*N + k]
-                             + d_c5*in[(i - 1)*N*N + j*N + k]
-                             + d_c6*in[(i + 1)*N*N + j*N + k];
+        out[i*N*N + j*N + k] = c0*in[i*N*N + j*N + k]
+                             + c1*in[i*N*N + j*N + (k - 1)]
+                             + c2*in[i*N*N + j*N + (k + 1)]
+                             + c3*in[i*N*N + (j - 1)*N + k]
+                             + c4*in[i*N*N + (j + 1)*N + k]
+                             + c5*in[(i - 1)*N*N + j*N + k]
+                             + c6*in[(i + 1)*N*N + j*N + k];
     }
 }
 
-void stencil_3d_parallel_basic(float* in, float* out, unsigned int N){
+void stencil_3d_parallel_basic(float* in, float* out, unsigned int N,
+                              int c0, int c1, int c2, int c3, int c4, int c5, int c6){
     float *d_in, *d_out;
     cudaError_t error;
 
@@ -79,7 +79,7 @@ void stencil_3d_parallel_basic(float* in, float* out, unsigned int N){
     dim3 dimBlock(OUT_TILE_DIM, OUT_TILE_DIM, OUT_TILE_DIM);
     dim3 dimGrid(cdiv(N, dimBlock.x), cdiv(N, dimBlock.y), cdiv(N, dimBlock.z));
 
-    stencil_kernel<<<dimGrid, dimBlock>>>(d_in, d_out, N);
+    stencil_kernel<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 
     error = cudaGetLastError();
     if (error != cudaSuccess) {
@@ -96,7 +96,8 @@ void stencil_3d_parallel_basic(float* in, float* out, unsigned int N){
     cudaFree(d_out);
 }
 
-__global__ void stencil_kernel_shared_memory(float* in, float* out, unsigned int N) {
+__global__ void stencil_kernel_shared_memory(float* in, float* out, unsigned int N,
+                                           int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
     int i = blockIdx.z*OUT_TILE_DIM + threadIdx.z - 1;
     int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
     int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
@@ -108,18 +109,19 @@ __global__ void stencil_kernel_shared_memory(float* in, float* out, unsigned int
     if(i >= 1 && i < N-1 && j >= 1 && j < N-1 && k >= 1 && k < N-1) {
         if(threadIdx.z >= 1 && threadIdx.z < IN_TILE_DIM-1 && threadIdx.y >= 1
            && threadIdx.y<IN_TILE_DIM-1 && threadIdx.x>=1 && threadIdx.x<IN_TILE_DIM-1) {
-            out[i*N*N + j*N + k] = d_c0*in_s[threadIdx.z][threadIdx.y][threadIdx.x]
-                                 + d_c1*in_s[threadIdx.z][threadIdx.y][threadIdx.x-1]
-                                 + d_c2*in_s[threadIdx.z][threadIdx.y][threadIdx.x+1]
-                                 + d_c3*in_s[threadIdx.z][threadIdx.y-1][threadIdx.x]
-                                 + d_c4*in_s[threadIdx.z][threadIdx.y+1][threadIdx.x]
-                                 + d_c5*in_s[threadIdx.z-1][threadIdx.y][threadIdx.x]
-                                 + d_c6*in_s[threadIdx.z+1][threadIdx.y][threadIdx.x];
+            out[i*N*N + j*N + k] = c0*in_s[threadIdx.z][threadIdx.y][threadIdx.x]
+                                 + c1*in_s[threadIdx.z][threadIdx.y][threadIdx.x-1]
+                                 + c2*in_s[threadIdx.z][threadIdx.y][threadIdx.x+1]
+                                 + c3*in_s[threadIdx.z][threadIdx.y-1][threadIdx.x]
+                                 + c4*in_s[threadIdx.z][threadIdx.y+1][threadIdx.x]
+                                 + c5*in_s[threadIdx.z-1][threadIdx.y][threadIdx.x]
+                                 + c6*in_s[threadIdx.z+1][threadIdx.y][threadIdx.x];
         }
     }
 }
 
-void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N){
+void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N,
+                                      int c0, int c1, int c2, int c3, int c4, int c5, int c6){
     float *d_in, *d_out;
     cudaError_t error;
 
@@ -141,10 +143,10 @@ void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N){
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);  // Was OUT_TILE_DIM
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);
     dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 
-    stencil_kernel_shared_memory<<<dimGrid, dimBlock>>>(d_in, d_out, N);
+    stencil_kernel_shared_memory<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 
     error = cudaGetLastError();
     if (error != cudaSuccess) {
@@ -161,7 +163,8 @@ void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N){
     cudaFree(d_out);
 }
 
-__global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned int N) {
+__global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned int N,
+                                                int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
     int iStart = blockIdx.z*OUT_TILE_DIM;
     int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
     int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
@@ -182,13 +185,13 @@ __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned
         if(i >= 1 && i < N - 1 && j >= 1 && j < N - 1 && k >= 1 && k < N - 1) {
             if(threadIdx.y >= 1 && threadIdx.y < IN_TILE_DIM - 1
                && threadIdx.x >= 1 && threadIdx.x < IN_TILE_DIM - 1) {
-                out[i*N*N + j*N + k] = d_c0*inCurr_s[threadIdx.y][threadIdx.x]
-                                     + d_c1*inCurr_s[threadIdx.y][threadIdx.x-1]
-                                     + d_c2*inCurr_s[threadIdx.y][threadIdx.x+1]
-                                     + d_c3*inCurr_s[threadIdx.y+1][threadIdx.x]
-                                     + d_c4*inCurr_s[threadIdx.y-1][threadIdx.x]
-                                     + d_c5*inPrev_s[threadIdx.y][threadIdx.x]
-                                     + d_c6*inNext_s[threadIdx.y][threadIdx.x];
+                out[i*N*N + j*N + k] = c0*inCurr_s[threadIdx.y][threadIdx.x]
+                                     + c1*inCurr_s[threadIdx.y][threadIdx.x-1]
+                                     + c2*inCurr_s[threadIdx.y][threadIdx.x+1]
+                                     + c3*inCurr_s[threadIdx.y+1][threadIdx.x]
+                                     + c4*inCurr_s[threadIdx.y-1][threadIdx.x]
+                                     + c5*inPrev_s[threadIdx.y][threadIdx.x]
+                                     + c6*inNext_s[threadIdx.y][threadIdx.x];
             }
         }
         __syncthreads();
@@ -197,7 +200,8 @@ __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned
     }
 }
 
-void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N){
+void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N,
+                                          int c0, int c1, int c2, int c3, int c4, int c5, int c6){
     float *d_in, *d_out;
     cudaError_t error;
 
@@ -219,10 +223,10 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);  // Was OUT_TILE_DIM
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);
     dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 
-    stencil_kernel_thread_coarsening<<<dimGrid, dimBlock>>>(d_in, d_out, N);
+    stencil_kernel_thread_coarsening<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 
     error = cudaGetLastError();
     if (error != cudaSuccess) {
@@ -239,7 +243,8 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
     cudaFree(d_out);
 }
 
-__global__ void stencil_kernel_register_tiling(float* in, float* out, unsigned int N) {
+__global__ void stencil_kernel_register_tiling(float* in, float* out, unsigned int N,
+                                              int c0, int c1, int c2, int c3, int c4, int c5, int c6) {
    int iStart = blockIdx.z*OUT_TILE_DIM;
    int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
    int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
@@ -265,13 +270,13 @@ __global__ void stencil_kernel_register_tiling(float* in, float* out, unsigned i
        if(i >= 1 && i < N - 1 && j >= 1 && j < N - 1 && k >= 1 && k < N - 1) {
            if(threadIdx.y >= 1 && threadIdx.y < IN_TILE_DIM - 1
               && threadIdx.x >= 1 && threadIdx.x < IN_TILE_DIM - 1) {
-               out[i*N*N + j*N + k] = d_c0*inCurr
-                                    + d_c1*inCurr_s[threadIdx.y][threadIdx.x-1]
-                                    + d_c2*inCurr_s[threadIdx.y][threadIdx.x+1]
-                                    + d_c3*inCurr_s[threadIdx.y+1][threadIdx.x]
-                                    + d_c4*inCurr_s[threadIdx.y-1][threadIdx.x]
-                                    + d_c5*inPrev
-                                    + d_c6*inNext;
+               out[i*N*N + j*N + k] = c0*inCurr
+                                    + c1*inCurr_s[threadIdx.y][threadIdx.x-1]
+                                    + c2*inCurr_s[threadIdx.y][threadIdx.x+1]
+                                    + c3*inCurr_s[threadIdx.y+1][threadIdx.x]
+                                    + c4*inCurr_s[threadIdx.y-1][threadIdx.x]
+                                    + c5*inPrev
+                                    + c6*inNext;
            }
        }
        __syncthreads();
@@ -281,7 +286,8 @@ __global__ void stencil_kernel_register_tiling(float* in, float* out, unsigned i
    }
 }
 
-void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N){
+void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N,
+                                        int c0, int c1, int c2, int c3, int c4, int c5, int c6){
     float *d_in, *d_out;
     cudaError_t error;
 
@@ -303,10 +309,10 @@ void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N){
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);  // Was OUT_TILE_DIM
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);
     dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 
-    stencil_kernel_register_tiling<<<dimGrid, dimBlock>>>(d_in, d_out, N);
+    stencil_kernel_register_tiling<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 
     error = cudaGetLastError();
     if (error != cudaSuccess) {
@@ -352,15 +358,7 @@ bool arrays_allclose(float* a, float* b, unsigned int size,
 }
 
 int main() {
-    cudaMemcpyToSymbol(d_c0, &c0, sizeof(int));
-    cudaMemcpyToSymbol(d_c1, &c1, sizeof(int));
-    cudaMemcpyToSymbol(d_c2, &c2, sizeof(int));
-    cudaMemcpyToSymbol(d_c3, &c3, sizeof(int));
-    cudaMemcpyToSymbol(d_c4, &c4, sizeof(int));
-    cudaMemcpyToSymbol(d_c5, &c5, sizeof(int));
-    cudaMemcpyToSymbol(d_c6, &c6, sizeof(int));
-
-    // Test with a small 4x4x4 grid
+    // Test with a small 7x7x7 grid
     unsigned int N = 7;
     int total_size = N * N * N;
     
@@ -386,8 +384,8 @@ int main() {
     }
     
     // Run both versions with separate output arrays
-    stencil_3d_sequential(in, out_sequential, N);
-    stencil_3d_parallel_register_tiling(in, out_parallel, N);
+    stencil_3d_sequential(in, out_sequential, N, c0, c1, c2, c3, c4, c5, c6);
+    stencil_3d_parallel_register_tiling(in, out_parallel, N, c0, c1, c2, c3, c4, c5, c6);
     
     printf("Sequential output:\n");
     for (int i = 0; i < N; i++) {
