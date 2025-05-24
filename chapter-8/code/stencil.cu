@@ -4,8 +4,8 @@
 #include <string.h>
 #include <time.h>
 #include <iostream>
-#define OUT_TILE_DIM 4
-#define IN_TILE_DIM (OUT_TILE_DIM+1)
+#define OUT_TILE_DIM 2
+#define IN_TILE_DIM (OUT_TILE_DIM+2)
 
 int c0 = 0;
 int c1 = 1;
@@ -141,8 +141,8 @@ void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N){
         return;
     }
 
-    dim3 dimBlock(OUT_TILE_DIM, OUT_TILE_DIM, OUT_TILE_DIM);
-    dim3 dimGrid(cdiv(N, dimBlock.x), cdiv(N, dimBlock.y), cdiv(N, dimBlock.z));
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);  // Was OUT_TILE_DIM
+    dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 
     stencil_kernel_shared_memory<<<dimGrid, dimBlock>>>(d_in, d_out, N);
 
@@ -219,7 +219,7 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
         return;
     }
 
-    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, 1);  // 5x5x1 = 25 threads
+    dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);  // Was OUT_TILE_DIM
     dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 
     stencil_kernel_thread_coarsening<<<dimGrid, dimBlock>>>(d_in, d_out, N);
@@ -251,6 +251,22 @@ void print_3d_slice(float* data, int N, int slice_i) {
     printf("\n");
 }
 
+bool arrays_allclose(float* a, float* b, unsigned int size, 
+                     float rtol = 1e-5f, float atol = 1e-8f) {
+    for (unsigned int i = 0; i < size; i++) {
+        float diff = fabs(a[i] - b[i]);
+        float tolerance = atol + rtol * fmax(fabs(a[i]), fabs(b[i]));
+        
+        if (diff > tolerance) {
+            // Optional: print first mismatch for debugging
+            printf("Mismatch at index %u: a[%u] = %f, b[%u] = %f, diff = %f, tolerance = %f\n", 
+                   i, i, a[i], i, b[i], diff, tolerance);
+            return false;
+        }
+    }
+    return true;
+}
+
 int main() {
     cudaMemcpyToSymbol(d_c0, &c0, sizeof(int));
     cudaMemcpyToSymbol(d_c1, &c1, sizeof(int));
@@ -260,19 +276,19 @@ int main() {
     cudaMemcpyToSymbol(d_c5, &c5, sizeof(int));
     cudaMemcpyToSymbol(d_c6, &c6, sizeof(int));
 
-
     // Test with a small 4x4x4 grid
-    unsigned int N = 4;
+    unsigned int N = 7;
     int total_size = N * N * N;
     
-    // Allocate memory
+    // Allocate memory for input and separate outputs
     float* in = (float*)malloc(total_size * sizeof(float));
-    float* out = (float*)malloc(total_size * sizeof(float));
+    float* out_sequential = (float*)malloc(total_size * sizeof(float));
+    float* out_parallel = (float*)malloc(total_size * sizeof(float));
     
     // Initialize input data with simple pattern
-    // Set all to 0 first
     memset(in, 0, total_size * sizeof(float));
-    memset(out, 0, total_size * sizeof(float));
+    memset(out_sequential, 0, total_size * sizeof(float));
+    memset(out_parallel, 0, total_size * sizeof(float));
     
     // Put a "hot spot" in the center
     in[1 * N * N + 1 * N + 1] = 10.0f;  // Center point
@@ -285,14 +301,44 @@ int main() {
         print_3d_slice(in, N, i);
     }
     
-    // Run the stencil
-    // stencil_3d_sequential(in, out, N);
-    stencil_3d_parallel_shared_memory(in, out, N);
+    // Run both versions with separate output arrays
+    stencil_3d_sequential(in, out_sequential, N);
+    stencil_3d_parallel_thread_coarsening(in, out_parallel, N);
     
-    printf("Output data:\n");
+    printf("Sequential output:\n");
     for (int i = 0; i < N; i++) {
-        print_3d_slice(out, N, i);
+        print_3d_slice(out_sequential, N, i);
     }
+    
+    printf("Parallel output:\n");
+    for (int i = 0; i < N; i++) {
+        print_3d_slice(out_parallel, N, i);
+    }
+    
+    // Compare the results
+    printf("Comparison:\n");
+    if (arrays_allclose(out_sequential, out_parallel, total_size)) {
+        printf("✓ Sequential and parallel results match!\n");
+    } else {
+        printf("✗ Sequential and parallel results differ!\n");
+        
+        // Print detailed comparison for debugging
+        printf("\nDetailed comparison:\n");
+        printf("Index    Sequential    Parallel      Difference\n");
+        printf("--------------------------------------------\n");
+        for (int i = 0; i < total_size; i++) {
+            float diff = fabs(out_sequential[i] - out_parallel[i]);
+            if (diff > 1e-5f) {  // Only print differences
+                printf("%5d    %10.6f    %10.6f    %10.6f\n", 
+                       i, out_sequential[i], out_parallel[i], diff);
+            }
+        }
+    }
+    
+    // Clean up
+    free(in);
+    free(out_sequential);
+    free(out_parallel);
     
     return 0;
 }
