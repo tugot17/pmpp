@@ -4,7 +4,8 @@
 #include <string.h>
 #include <time.h>
 #include <iostream>
-#define BLOCK_SIZE 4
+#define OUT_TILE_DIM 4
+#define IN_TILE_DIM (OUT_TILE_DIM+1)
 
 int c0 = 0;
 int c1 = 1;
@@ -15,7 +16,6 @@ int c5 = 1;
 int c6 = 1;
 
 __constant__ int d_c0, d_c1, d_c2, d_c3, d_c4, d_c5, d_c6;
-
 
 
 inline unsigned int cdiv(unsigned int a, unsigned int b) {
@@ -76,10 +76,75 @@ void stencil_3d_parallel_basic(float* in, float* out, unsigned int N){
         return;
     }
 
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-    dim3 dimGrid(cdiv(N, dimBlock.x), cdiv(N, dimBlock.x), cdiv(N, dimBlock.x));
+    dim3 dimBlock(OUT_TILE_DIM, OUT_TILE_DIM, OUT_TILE_DIM);
+    dim3 dimGrid(cdiv(N, dimBlock.x), cdiv(N, dimBlock.y), cdiv(N, dimBlock.z));
 
     stencil_kernel<<<dimGrid, dimBlock>>>(d_in, d_out, N);
+
+    error = cudaGetLastError();
+    if (error != cudaSuccess) {
+        std::cout << "Kernel launch failed: " << cudaGetErrorString(error) << std::endl;
+    }
+    cudaDeviceSynchronize();
+
+    error = cudaMemcpy(out, d_out, N * N * N * sizeof(float), cudaMemcpyDeviceToHost);
+    if (error != cudaSuccess) {
+        std::cout << "cudaMemcpy to host failed: " << cudaGetErrorString(error) << std::endl;
+    }
+
+    cudaFree(d_in);
+    cudaFree(d_out);
+}
+
+__global__ void stencil_kernel_shared_memory(float* in, float* out, unsigned int N) {
+    int i = blockIdx.z*OUT_TILE_DIM + threadIdx.z - 1;
+    int j = blockIdx.y*OUT_TILE_DIM + threadIdx.y - 1;
+    int k = blockIdx.x*OUT_TILE_DIM + threadIdx.x - 1;
+    __shared__ float in_s[IN_TILE_DIM][IN_TILE_DIM][IN_TILE_DIM];
+    if(i >= 0 && i < N && j >= 0 && j < N && k >= 0 && k < N) {
+        in_s[threadIdx.z][threadIdx.y][threadIdx.x] = in[i*N*N + j*N + k];
+    }
+    __syncthreads();
+    if(i >= 1 && i < N-1 && j >= 1 && j < N-1 && k >= 1 && k < N-1) {
+        if(threadIdx.z >= 1 && threadIdx.z < IN_TILE_DIM-1 && threadIdx.y >= 1
+           && threadIdx.y<IN_TILE_DIM-1 && threadIdx.x>=1 && threadIdx.x<IN_TILE_DIM-1) {
+            out[i*N*N + j*N + k] = d_c0*in_s[threadIdx.z][threadIdx.y][threadIdx.x]
+                                 + d_c1*in_s[threadIdx.z][threadIdx.y][threadIdx.x-1]
+                                 + d_c2*in_s[threadIdx.z][threadIdx.y][threadIdx.x+1]
+                                 + d_c3*in_s[threadIdx.z][threadIdx.y-1][threadIdx.x]
+                                 + d_c4*in_s[threadIdx.z][threadIdx.y+1][threadIdx.x]
+                                 + d_c5*in_s[threadIdx.z-1][threadIdx.y][threadIdx.x]
+                                 + d_c6*in_s[threadIdx.z+1][threadIdx.y][threadIdx.x];
+        }
+    }
+}
+
+void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N){
+    float *d_in, *d_out;
+    cudaError_t error;
+
+    error = cudaMalloc((void**)&d_in, N*N*N * sizeof(float));
+    if (error != cudaSuccess) {
+        std::cout << "cudaMalloc d_in failed: " << cudaGetErrorString(error) << std::endl;
+        return;
+    }
+
+    error = cudaMalloc((void**)&d_out, N*N*N * sizeof(float));
+    if (error != cudaSuccess) {
+        std::cout << "cudaMalloc d_out failed: " << cudaGetErrorString(error) << std::endl;
+        return;
+    }
+
+    error = cudaMemcpy(d_in, in, N * N * N * sizeof(float), cudaMemcpyHostToDevice);
+    if (error != cudaSuccess) {
+        std::cout << "cudaMemcpy to device failed: " << cudaGetErrorString(error) << std::endl;
+        return;
+    }
+
+    dim3 dimBlock(OUT_TILE_DIM, OUT_TILE_DIM, OUT_TILE_DIM);
+    dim3 dimGrid(cdiv(N, dimBlock.x), cdiv(N, dimBlock.y), cdiv(N, dimBlock.z));
+
+    stencil_kernel_shared_memory<<<dimGrid, dimBlock>>>(d_in, d_out, N);
 
     error = cudaGetLastError();
     if (error != cudaSuccess) {
@@ -144,7 +209,7 @@ int main() {
     
     // Run the stencil
     // stencil_3d_sequential(in, out, N);
-    stencil_3d_parallel_basic(in, out, N);
+    stencil_3d_parallel_shared_memory(in, out, N);
     
     printf("Output data:\n");
     for (int i = 0; i < N; i++) {
