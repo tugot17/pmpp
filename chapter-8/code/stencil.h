@@ -1,15 +1,16 @@
-#ifndef STENCIL_H
-#define STENCIL_H
+#ifndef CHAPTER_8_CODE_STENCIL_H_
+#define CHAPTER_8_CODE_STENCIL_H_
 
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-//some of our kernels have qubic requirement for the shared memory, other have squared, hence we introduce two block sizes
+// some of our kernels have qubic requirement for the shared memory, other have squared, hence we introduce two block
+// sizes
 #define OUT_TILE_DIM_SMALL 8
-#define IN_TILE_DIM_SMALL (OUT_TILE_DIM_SMALL+2)
+#define IN_TILE_DIM_SMALL (OUT_TILE_DIM_SMALL + 2)
 #define OUT_TILE_DIM_BIG 30
-#define IN_TILE_DIM_BIG (OUT_TILE_DIM_BIG+2)
+#define IN_TILE_DIM_BIG (OUT_TILE_DIM_BIG + 2)
 
 extern int c0, c1, c2, c3, c4, c5, c6;
 
@@ -41,19 +42,19 @@ inline unsigned int cdiv(unsigned int a, unsigned int b) {
 }
 
 // Stencil implementations
-void stencil_3d_sequential(float* in, float* out, unsigned int N, 
-                          int c0, int c1, int c2, int c3, int c4, int c5, int c6);
+void stencil_3d_sequential(float* in, float* out, unsigned int N, int c0, int c1, int c2, int c3, int c4, int c5,
+                           int c6);
 
-void stencil_3d_parallel_basic(float* in, float* out, unsigned int N,
-                              int c0, int c1, int c2, int c3, int c4, int c5, int c6);
+void stencil_3d_parallel_basic(float* in, float* out, unsigned int N, int c0, int c1, int c2, int c3, int c4, int c5,
+                               int c6);
 
-void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N,
-                                      int c0, int c1, int c2, int c3, int c4, int c5, int c6);
+void stencil_3d_parallel_shared_memory(float* in, float* out, unsigned int N, int c0, int c1, int c2, int c3, int c4,
+                                       int c5, int c6);
 
-void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N,
-                                          int c0, int c1, int c2, int c3, int c4, int c5, int c6);
+void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N, int c0, int c1, int c2, int c3,
+                                           int c4, int c5, int c6);
 
-void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N,
-                                        int c0, int c1, int c2, int c3, int c4, int c5, int c6);
+void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N, int c0, int c1, int c2, int c3, int c4,
+                                         int c5, int c6);
 
-#endif // STENCIL_H
+#endif  // CHAPTER_8_CODE_STENCIL_H_
