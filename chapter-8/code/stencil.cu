@@ -163,7 +163,6 @@ __global__ void stencil_kernel_thread_coarsening(float* in, float* out, unsigned
     __shared__ float inCurr_s[IN_TILE_DIM_BIG][IN_TILE_DIM_BIG];
     __shared__ float inNext_s[IN_TILE_DIM_BIG][IN_TILE_DIM_BIG];
     
-    // Initialize shared memory
     inPrev_s[threadIdx.y][threadIdx.x] = 0.0f;
     inCurr_s[threadIdx.y][threadIdx.x] = 0.0f;
     inNext_s[threadIdx.y][threadIdx.x] = 0.0f;
