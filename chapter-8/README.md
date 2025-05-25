@@ -35,8 +35,7 @@ dim3 dimBlock(OUT_TILE_DIM, OUT_TILE_DIM, OUT_TILE_DIM);
 dim3 dimGrid(cdiv(N, dimBlock.x), cdiv(N, dimBlock.y), cdiv(N, dimBlock.z));
 stencil_kernel<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 ```
-
-We launch the kernel in Fig. 8.6. for every point in the input grid. We have `120 x 120 x 120` points and we lauch in blocks of `8 x 8 x 8`. Hence we will have `120 x 120 x 120 / 8 x 8 x 8 -> 15 x 15 x 15 = 3375` blocks. 
+We launch the kernel in Fig. 8.6. for every point in the input grid. We have `120 x 120 x 120` points, and we launch in blocks of `8 x 8 x 8`. Hence, we will have `120 x 120 x 120 / 8 x 8 x 8 -> 15 x 15 x 15 = 3375` blocks. 
 
 **c. For the kernel with shared memory tiling in Fig. 8.8, what is the number of thread blocks that are needed, assuming a block size of `8 x 8 x 8`?**
 
@@ -69,10 +68,9 @@ dim3 dimBlock(IN_TILE_DIM, IN_TILE_DIM, IN_TILE_DIM);
 dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM));
 stencil_kernel_shared_memory<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 ```
-
 We launch blocks of `8 x 8 x 8`, but for this kernel we launch block size `IN_TILE_DIM`. The `OUT_TILE_DIM` will be `IN_TILE_DIM - 2 = 8-2=6`
 
-We launch `cdiv(N, OUT_TILE_DIM) = cdiv(120, 6) = 20` blocks in every exis so `20 x 20 x 20 = 8,000` blocks. 
+We launch `cdiv(N, OUT_TILE_DIM) = cdiv(120, 6) = 20` blocks in every axis, so `20 x 20 x 20 = 8,000` blocks. 
 
 **d. For the kernel with shared memory tiling and thread coarsening in Fig. 8.10, what is the number of thread blocks that are needed, assuming a block size of `32 x 32` ?**
 
@@ -125,14 +123,14 @@ dim3 dimGrid(cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM), cdiv(N, OUT_TILE_DIM)
 stencil_kernel_thread_coarsening<<<dimGrid, dimBlock>>>(d_in, d_out, N, c0, c1, c2, c3, c4, c5, c6);
 ```
 
-We launch block of size `32 x 32`, meaning `IN_TILE_DIM = 32` and `OUT_TILE_DIM = IN_TILE_DIM - 2 = 32 - 2 = 30`.
+We launch a block of size `32 x 32`, meaning `IN_TILE_DIM = 32` and `OUT_TILE_DIM = IN_TILE_DIM - 2 = 32 - 2 = 30`.
 Given that we launch `cdiv(N, OUT_TILE_DIM) = cdiv(120, 30) = 4` blocks in each direction. So `4x4x4=64` blocks in total. 
 
 ### Exercise 2
 
 **Consider an implementation of a seven-point (3D) stencil with shared memory tiling and thread coarsening applied. The implementation is similar to those in Figs. 8.10 and 8.12, except that the tiles are not perfect cubes. Instead, a thread block size of `32 x 32` is used as well as a coarsening factor of 16 (i.e., each thread block processes 16 consecutive output planes in the z dimension).**
 
-As a starting point let's try to write such a kernel:
+As a starting point, let's try to write such a kernel:
 
 ```cpp
 #define OUT_TILE_DIM 30      
@@ -223,18 +221,18 @@ Each thread will write to the output tile of size `OUT_TILE_DIM x OUT_TILE_DIM =
 
 **c. What is the floating point to global memory access ratio (in OP/B) of the kernel?**
 
-We load `18432` elements, since this is a stancil each being `4 bytes` we load total of `18432 x 4 = 73728` bytes. 
+We load `18432` elements; since this is a stencil, each element being `4 bytes`, we load a total of `18432 x 4 = 73728` bytes. 
 
-For every output element we do 7 multiplications and 6 additions - 13 FLOPs in total. Since we have a total of `14400` output elements we do `14400 x 13 = 187200` floating point operations.
+For every output element, we do 7 multiplications and 6 additions—13 FLOPs in total. Since we have a total of `14400` output elements, we do `14400 x 13 = 187200` floating-point operations.
 
 So we have `(14400 x 13) / (18432 x 4) = 187200/73728 = 2.54` OP/B.
 
-*Note that this includes reads only, we also have writes that are not accounted for in this example. 
+*Note that this includes reads only; we also have writes that are not accounted for in this example. 
 
 **d. How much shared memory (in bytes) is needed by each thread block if register tiling is not used, as in Fig. 8.10?**
 
-We store three consecutive tiles to be stored, each tile is `IN_TILE_DIM x IN_TILE_DIM` and consists of 4-bit numbers, so we need `3 x IN_TILE_DIM x IN_TILE_DIM x 4 = 3 x 32 x 32 x 4 = 12288` bytes.
+We store three consecutive tiles to be stored; each tile is `IN_TILE_DIM x IN_TILE_DIM` and consists of 4-bit numbers, so we need `3 x IN_TILE_DIM x IN_TILE_DIM x 4 = 3 x 32 x 32 x 4 = 12288` bytes.
 
 **e. How much shared memory (in bytes) is needed by each thread block if register tiling is used, as in Fig. 8.12?**
 
-If the register tiling optimization is being used we only need to store a single output tile, so we will need `IN_TILE_DIM x IN_TILE_DIM x 4 = 32 x 32 x 4 = 4096` bytes in shared memory. Note that this will come at increased demand on registers. 
+If the register tiling optimization is being used, we only need to store a single output tile, so we will need `IN_TILE_DIM x IN_TILE_DIM x 4 = 32 x 32 x 4 = 4096` bytes in shared memory. Note that this will come at increased demand on registers. 
