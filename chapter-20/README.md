@@ -115,3 +115,104 @@ Nope, each MPI process has its own memory - we call it distrubuted memory model.
 
 **Modify the example code to remove the calls to cudaMemcpyAsync() from the compute processes’ code by using GPU memory addresses on `MPI_Send` and `MPI_Recv`.**
 
+```cpp
+void compute_node_stencil(int dimx, int dimy, int dimz, int nreps ) {
+    int np, pid;
+    MPI_Comm_rank(MPI_COMM_WORLD, &pid);
+    MPI_Comm_size(MPI_COMM_WORLD, &np);
+    int server_process = np - 1;
+    unsigned int num_points      = dimx * dimy * (dimz + 8);
+    unsigned int num_bytes       = num_points * sizeof(float);
+    unsigned int num_halo_points = 4 * dimx * dimy;
+    unsigned int num_halo_bytes  = num_halo_points * sizeof(float);
+    MPI_Status status;
+    
+    /* Allocate host memory */
+    float *h_input  = (float *)malloc(num_bytes);
+    /* Allocate device memory for input and output data */
+    float *d_input = NULL;
+    cudaMalloc((void **)&d_input,  num_bytes );
+    float *rcv_address = h_input + ((0 == pid) ? num_halo_points : 0);
+    MPI_Recv(rcv_address, num_points, MPI_FLOAT, server_process,
+        MPI_ANY_TAG, MPI_COMM_WORLD, &status );
+    cudaMemcpy(d_input, h_input, num_bytes, cudaMemcpyHostToDevice);
+
+    float *h_output = NULL, *d_output = NULL;
+    h_output = (float *)malloc(num_bytes);
+    cudaMalloc((void **)&d_output, num_bytes );
+
+    // REMOVED: Host pinned memory allocations for halo data
+    // No longer need h_left_boundary, h_right_boundary, h_left_halo, h_right_halo
+
+    /* Create streams used for stencil computation */
+    cudaStream_t stream0, stream1;
+    cudaStreamCreate(&stream0);
+    cudaStreamCreate(&stream1);
+
+    int left_neighbor  = (pid > 0)         ? (pid - 1) : MPI_PROC_NULL;
+    int right_neighbor = (pid < np - 2)    ? (pid + 1) : MPI_PROC_NULL;
+
+    /* Upload stencil coefficients */
+    float dummy_coeff[5];
+    upload_coefficients(dummy_coeff, 5);
+    int left_halo_offset    = 0;
+    int right_halo_offset   = dimx * dimy * (4 + dimz);
+    int left_stage1_offset  = 0;
+    int right_stage1_offset = dimx * dimy * (dimz - 4);
+    int stage2_offset       = num_halo_points;
+    MPI_Barrier( MPI_COMM_WORLD );
+    
+    for(int i=0; i < nreps; i++) {
+        /* Compute boundary values needed by other nodes first */
+        call_stencil_kernel(d_output + left_stage1_offset,
+            d_input + left_stage1_offset, dimx, dimy, 12, stream0);
+        call_stencil_kernel(d_output + right_stage1_offset,
+            d_input + right_stage1_offset, dimx, dimy, 12, stream0);
+        /* Compute the remaining points */
+        call_stencil_kernel(d_output + stage2_offset, d_input + 
+            stage2_offset, dimx, dimy, dimz, stream1);
+
+        // REMOVED: cudaMemcpyAsync calls to copy data to host
+        // REMOVED: cudaStreamSynchronize(stream0)
+
+        /* CUDA-aware MPI: Direct GPU-to-GPU communication */
+        /* Send data to left, get data from right */
+        MPI_Sendrecv(d_output + num_halo_points, num_halo_points, MPI_FLOAT,
+            left_neighbor, i, d_output + right_halo_offset, num_halo_points,
+            MPI_FLOAT, right_neighbor, i, MPI_COMM_WORLD, &status );
+        /* Send data to right, get data from left */
+        MPI_Sendrecv(d_output + right_stage1_offset + num_halo_points, num_halo_points, MPI_FLOAT,
+            right_neighbor, i, d_output + left_halo_offset, num_halo_points,
+            MPI_FLOAT, left_neighbor, i, MPI_COMM_WORLD, &status );
+
+        // REMOVED: cudaMemcpyAsync calls to copy data back to device
+
+        cudaDeviceSynchronize();
+
+        float *temp = d_output;
+        d_output = d_input; d_input = temp;
+    }
+
+    /* Wait for previous communications */
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    float *temp = d_output;
+    d_output = d_input;
+    d_input = temp;
+
+    /* Send the output, skipping halo points */
+    cudaMemcpy(h_output, d_output, num_bytes, cudaMemcpyDeviceToHost);
+    float *send_address = h_output + num_halo_points;
+    MPI_Send(send_address, dimx * dimy * dimz, MPI_FLOAT,
+        server_process, DATA_COLLECT, MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    /* Release resources */
+    free(h_input); free(h_output);
+    // REMOVED: cudaFreeHost calls for halo memory
+    cudaFree( d_input ); cudaFree( d_output );
+    cudaStreamDestroy(stream0);
+    cudaStreamDestroy(stream1);
+}
+```
+
