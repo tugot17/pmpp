@@ -93,21 +93,22 @@ Displaying comparison visualization...
 50 computeBezierLines_parent<<<blocks, BLOCK_DIM>>>(d_lines, num_lines);
 ```
 **a. If `N_LINES=1024` and `BLOCK_DIM=64`, the number of child kernels that are launched will be 16.**
-If `N_LINES=1024` and `BLOCK_DIM=64` it means we will launch `1024/64=16` blocks each of size 64 - and `16 x 64 = 1024` threads in total, meaning 1024 threads will be true for line 26. 
+If `N_LINES=1024` and `BLOCK_DIM=64` it means we will launch `1024/64=16` blocks, each of size 64 - and `16 x 64 = 1024` threads in total, meaning 1024 threads will be true for line 26. 
+
 ```cpp
-25      int idx = threadIdx.x + blockDim.x*blockIdx.x; //Compute idx unique to this vertex
-26      if(idx < nTessPoints){
+25 int idx = threadIdx.x + blockDim.x*blockIdx.x; //Compute idx unique to this vertex
+26 if(idx < nTessPoints){
 ```
 
-which implies that 1024 not 16 child kernels will be launched. 
+which implies that 1024, not 16, child kernels will be launched. 
 
 **False**
 
 **b. If N_LINES=1024, the fixed-size pool should be reduced from 2048 (the default) to 1024 to get the best performance**
-Per subchapter "Pending launch pool configuration"
+Per subchapter "Pending launch pool configuration":
 > As a general recommendation, the size of the fixed-size pool should be set to the expected number of launched grids (if it exceeds the default size).
 
-We will launch 1024 child grids, this is less than the default 2048, but this should not affect our performance, as none of the grids will require the use of virtualized pool. 
+We will launch 1024 child grids; this is less than the default 2048, but this should not affect our performance, as none of the grids will require the use of a virtualized pool. 
 
 **False**
 
@@ -126,7 +127,7 @@ computeBezierLine_child<<<ceil((float)bLines[lidx].nVertices/32.0f), 32, 0, stre
 cudaStreamDestroy(stream);
 ```
 
-Again, we are are launching `1024` threads (see **a**), each will launch a child grid, if we use the per thread stream we will launch a total of `1024` threads. If we did not use the per-thread streams we would indeed have 16 streams cause we launch 16 blocks (see **a**), and we have a stream per block as per book:
+Again, we are launching `1024` threads (see a); each will launch a child grid. If we use the per-thread stream, we will launch a total of `1024` threads. If we did not use the per-thread streams, we would indeed have 16 streams because we launch 16 blocks (see a), and we have a stream per block as per book:
 
 > When a stream is not specified in a kernel call, the default NULL stream in the block is used by all threads. This means that all grids that are launched in the same block will be serialized even if they were launched by different threads
 
@@ -144,7 +145,7 @@ Depth 1: 4 blocks maximally including each `64/4 = 16` elements
 Depth 2: 16 blocks maximally including each `16/4 = 4` elements
 Depth 3: 64 blocks maximally including each `4/4 = 1` elements
 
-So answer is is 4 (we started from 0).
+So the answer is **b**, a depth of 4 (we started from 0).
 
 ### Exercise 3
 **For the same quadtree, what will be the total number of child kernel launches?**
@@ -153,12 +154,28 @@ So answer is is 4 (we started from 0).
 **c. 64**
 **d. 16**
 
+Depth 0: 1 block launching 4 children
+Depth 1: 4 blocks each launching 4 children
+Depth 2: 16 blocks each launching 4 children
+
+`1 + 4 + 16 = 21` child kernel launches. 
+
+**c**
 
 ### Exercise 4
 **True or False: Parent kernels can define new __constant__ variables that will be inherited by child kernels.**
 
+Constant memory is compile-time defined: Constant variables (declared with __constant__) must be defined at compile time, not runtime. They're part of the compiled kernel image. There's no mechanism for kernels to dynamically create new constant memory variables during execution.
+
+**False**
+
 ### Exercise 5
 **True or False: Child kernels can access their parents’ shared and local memories.**
+
+As per book:
+> The memory that can be accessed by both parent threads and their child grids includes global memory, constant mem- ory, and texture memory. A parent thread should not pass pointers to local mem- ory or shared memory to their child grids because local memory and shared memory are private to the thread and the thread block, respectively.
+
+**False**
 
 
 ### Exercise 6
@@ -174,8 +191,10 @@ __global__ void parent_kernel(int *output, int *input, int *size) {
    int numBlocks = size[idx] / blockDim.x;
    
    // Launch child
-   child_kernel<<<numBlocks, blockDim.x >>>(output, input, size);
+   child_kernel<<<numBlocks, blockDim.x>>>(output, input, size);
 }
+...
+parent_kernel<<<6, 256>>>(output, input, size)
 ```
 
 **How many child kernels could run concurrently?**
@@ -184,4 +203,16 @@ __global__ void parent_kernel(int *output, int *input, int *size) {
 **c. 6**
 **d. 1**
 
+We launch `6` blocks, `256` threads each. Each thread will launch the child grid `child_kernel`. As per book:
+> When a stream is not specified in a kernel call, the default NULL stream in the block is used by all threads. This means that all grids that are launched in the same block will be serialized even if they were launched by different threads
 
+Since we don't specify the separate per-thread streams, all the child grid launches within a block will be serialized, meaning that 6 different blocks will launch concurrently. Within each block 
+
+```cpp
+int numBlocks = size[idx] / 256;
+child_kernel<<<numBlocks, 256>>>(output, input, size);
+```
+
+We launch a grid of size `numBlocks x 256`, so we will have a total of `6 x numBlocks x 256 = 1536 x numBlocks` kernels running concurrently. Based on this, a multiple of `1536` child kernels will be running concurrently. 
+
+So I would say answer a, though it is not 100% clear that it is entirely correct.
