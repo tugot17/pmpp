@@ -1,83 +1,82 @@
 #include <stdio.h>
-#include <cuda_runtime.h>
-#include <math.h>
-
+#include <cuda.h>
 #define MAX_TESS_POINTS 32
 
-// Single unified structure - no separate C/CUDA versions needed
-struct BezierCurve {
-    float cp[6];                    // Control points: [x0,y0,x1,y1,x2,y2]
-    float vertices[MAX_TESS_POINTS*2]; // Tessellated vertices: [x0,y0,x1,y1,...]
-    int num_vertices;               // Number of tessellated vertices
+// A structure containing all parameters needed to tessellate a Bezier line
+struct BezierLine {
+   float2 CP[3];                    //Control points for the line
+   float2 vertexPos[MAX_TESS_POINTS]; //Vertex position array to tessellate into
+   int nVertices;                   //Number of tessellated vertices
 };
 
-// Simple curvature calculation
-__device__ float calculate_curvature(float* cp) {
-    // Distance from middle control point to line between endpoints
-    float dx = cp[4] - cp[0];  // x2 - x0
-    float dy = cp[5] - cp[1];  // y2 - y0
+__device__ float computeCurvature(float2 *cp) {
+    float dx = cp[2].x - cp[0].x;
+    float dy = cp[2].y - cp[0].y; 
     float line_length = sqrtf(dx*dx + dy*dy);
-    
     if (line_length < 0.001f) return 0.0f;
     
-    // Distance from control point to line
-    float cross = fabsf((cp[2]-cp[0])*dy - (cp[3]-cp[1])*dx);
+    float cross = fabsf((cp[1].x - cp[0].x)*dy - (cp[1].y - cp[0].y)*dx);
     return cross / line_length;
 }
 
-// One thread per curve - much simpler!
-__global__ void tessellate_curves(BezierCurve* curves, int num_curves) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx >= num_curves) return;
-    
-    BezierCurve* curve = &curves[idx];
-    
-    // Calculate tessellation level based on curvature
-    float curvature = calculate_curvature(curve->cp);
-    int num_points = fminf(fmaxf((int)(curvature * 16.0f), 4), MAX_TESS_POINTS);
-    curve->num_vertices = num_points;
-    
-    // Tessellate the curve
-    for (int i = 0; i < num_points; i++) {
-        float t = (float)i / (float)(num_points - 1);
-        float t2 = t * t;
-        float mt = 1.0f - t;
-        float mt2 = mt * mt;
-        
-        // Quadratic Bezier formula
-        float x = mt2 * curve->cp[0] + 2*mt*t * curve->cp[2] + t2 * curve->cp[4];
-        float y = mt2 * curve->cp[1] + 2*mt*t * curve->cp[3] + t2 * curve->cp[5];
-        
-        curve->vertices[i*2] = x;
-        curve->vertices[i*2+1] = y;
-    }
+__global__ void computeBezierLines(BezierLine *bLines, int nLines) {
+   int bidx = blockIdx.x;
+   if(bidx < nLines){
+       //Compute the curvature of the line
+       float curvature = computeCurvature(bLines[bidx].CP);
+       //From the curvature, compute the number of tessellation points
+       int nTessPoints = min(max((int)(curvature*16.0f),4),32);
+       bLines[bidx].nVertices = nTessPoints;
+       //Loop through vertices to be tessellated, incrementing by blockDim.x
+       for(int inc = 0; inc < nTessPoints; inc += blockDim.x){
+           int idx = inc + threadIdx.x;  //Compute a unique index for this point
+           if(idx < nTessPoints){
+               float u = (float)idx/(float)(nTessPoints-1);  //Compute u from idx
+               float omu = 1.0f - u;    //pre-compute one minus u
+               float B3u[3]; //Compute quadratic Bezier coefficients
+               B3u[0] = omu*omu;
+               B3u[1] = 2.0f*u*omu;
+               B3u[2] = u*u;
+               float2 position = {0,0};  //Set position to zero
+               for(int i = 0; i < 3; i++){
+                   //Add the contribution of the i'th control point to position
+                   position.x += B3u[i] * bLines[bidx].CP[i].x;
+                   position.y += B3u[i] * bLines[bidx].CP[i].y;
+               }
+               //Assign value of vertex position to the correct array element
+               bLines[bidx].vertexPos[idx] = position;
+           }
+       }
+   }
 }
 
-// Simplified host interface
+// Host wrapper function
 extern "C" {
-    int tessellate_bezier_curves(BezierCurve* curves, int num_curves) {
-        BezierCurve* d_curves;
-        size_t size = num_curves * sizeof(BezierCurve);
-        
-        // Allocate and copy to device
-        if (cudaMalloc(&d_curves, size) != cudaSuccess) return -1;
-        if (cudaMemcpy(d_curves, curves, size, cudaMemcpyHostToDevice) != cudaSuccess) {
-            cudaFree(d_curves);
-            return -2;
-        }
-        
-        // Launch kernel: one thread per curve
-        int threads = min(256, num_curves);
-        int blocks = (num_curves + threads - 1) / threads;
-        tessellate_curves<<<blocks, threads>>>(d_curves, num_curves);
-        
-        // Copy results back
-        if (cudaMemcpy(curves, d_curves, size, cudaMemcpyDeviceToHost) != cudaSuccess) {
-            cudaFree(d_curves);
-            return -3;
-        }
-        
-        cudaFree(d_curves);
-        return 0;
+int tessellate_bezier_lines(BezierLine* lines, int num_lines) {
+    BezierLine* d_lines;
+    size_t size = num_lines * sizeof(BezierLine);
+    
+    // Allocate and copy to device
+    if (cudaMalloc(&d_lines, size) != cudaSuccess) return -1;
+    if (cudaMemcpy(d_lines, lines, size, cudaMemcpyHostToDevice) != cudaSuccess) {
+        cudaFree(d_lines);
+        return -2;
     }
+    
+    // Launch kernel: one block per line, multiple threads per block
+    int threads = 32; // Adjust based on your needs
+    computeBezierLines<<<num_lines, threads>>>(d_lines, num_lines);
+    
+    // Wait for kernel to complete
+    cudaDeviceSynchronize();
+    
+    // Copy results back to host
+    if (cudaMemcpy(lines, d_lines, size, cudaMemcpyDeviceToHost) != cudaSuccess) {
+        cudaFree(d_lines);
+        return -3;
+    }
+    
+    cudaFree(d_lines);
+    return 0;
+}
 }

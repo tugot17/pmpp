@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""
-Simple Bezier tessellation using your existing compiled library
-"""
-
 import ctypes
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Use your existing structure format
 class BezierLineC(ctypes.Structure):
     _fields_ = [
         ("CP", ctypes.c_float * 6),        
@@ -22,7 +17,6 @@ def simple_tessellate(control_points_list):
     Args:
         control_points_list: List of [(x0,y0), (x1,y1), (x2,y2)] tuples
     """
-    # Load your existing library
     lib = ctypes.CDLL("./libbezier.so")
     lib.tessellate_bezier_curves.argtypes = [ctypes.POINTER(BezierLineC), ctypes.c_int]
     lib.tessellate_bezier_curves.restype = ctypes.c_int
