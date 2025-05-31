@@ -2,6 +2,14 @@
 
 ## Code
 
+We implement the two dynamic parallel examples mentioned in this chapter, Bezier curves and quadtrees. We implement both of them based on the example presented in the book, and for both of them we attach the host code. 
+
+We also provide the Python files showing the effects of running the algorithm with some benchmarking and little visualizations. 
+
+Note that due to the dynamic parallelism, we need to compile in a specific way. 
+
+### Bezier curves
+
 ```bash
 nvcc -shared -o libbezier.so -lcuda --compiler-options '-fPIC' -rdc=true bezier_curves.cu
 
@@ -34,6 +42,15 @@ Displaying comparison visualization...
 
 ![reconstruction](code/bezier_comparison_static_vs_dynamic.png)
 
+### Quadtree
+
+```bash
+nvcc -shared -Xcompiler -fPIC -o quadtrees.so quadtrees.cu -rdc=true -lcudadevrt
+
+python quadtree_visualizer.py
+```
+
+![reconstruction](code/quadtree.png)
 
 ## Exercises
 
