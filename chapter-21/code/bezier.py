@@ -1,241 +1,86 @@
 #!/usr/bin/env python3
 """
-Bezier Curve Tessellation and Visualization using CUDA
-Compiles CUDA code and visualizes tessellated Bezier curves
+Simple Bezier tessellation using your existing compiled library
 """
 
 import ctypes
 import numpy as np
 import matplotlib.pyplot as plt
-import subprocess
-import os
-import sys
-from dataclasses import dataclass
-from typing import List, Tuple
 
-# Structure definition matching the C code
+# Use your existing structure format
 class BezierLineC(ctypes.Structure):
     _fields_ = [
-        ("CP", ctypes.c_float * 6),        # 3 control points * 2 coordinates
-        ("vertexPos", ctypes.c_float * 64), # MAX_TESS_POINTS * 2 coordinates  
+        ("CP", ctypes.c_float * 6),        
+        ("vertexPos", ctypes.c_float * 64), 
         ("nVertices", ctypes.c_int)
     ]
 
-@dataclass
-class BezierCurve:
-    """Python-friendly Bezier curve representation"""
-    p0: Tuple[float, float]  # Start point
-    p1: Tuple[float, float]  # Control point
-    p2: Tuple[float, float]  # End point
+def simple_tessellate(control_points_list):
+    """
+    Simple tessellation using your existing library
     
-    def to_c_struct(self) -> BezierLineC:
-        """Convert to C structure"""
-        line = BezierLineC()
-        line.CP[0] = self.p0[0]  # P0.x
-        line.CP[1] = self.p0[1]  # P0.y
-        line.CP[2] = self.p1[0]  # P1.x
-        line.CP[3] = self.p1[1]  # P1.y
-        line.CP[4] = self.p2[0]  # P2.x
-        line.CP[5] = self.p2[1]  # P2.y
-        line.nVertices = 0
-        return line
-
-class BezierTessellator:
-    """CUDA-accelerated Bezier curve tessellator"""
+    Args:
+        control_points_list: List of [(x0,y0), (x1,y1), (x2,y2)] tuples
+    """
+    # Load your existing library
+    lib = ctypes.CDLL("./libbezier.so")
+    lib.tessellate_bezier_curves.argtypes = [ctypes.POINTER(BezierLineC), ctypes.c_int]
+    lib.tessellate_bezier_curves.restype = ctypes.c_int
     
-    def __init__(self, cuda_lib_path: str = None):
-        self.lib = None
-        self.cuda_lib_path = cuda_lib_path or "libbezier.so"
-        self._compile_and_load()
+    # Setup curves
+    n = len(control_points_list)
+    curves = (BezierLineC * n)()
     
-    def _compile_and_load(self):
-        """Compile CUDA code and load shared library"""
-        print("Compiling CUDA code...")
-        
-        # Check if helper_math.h exists, if not create a minimal version
-        if not os.path.exists("helper_math.h"):
-            self._create_helper_math()
-        
-        # Compile command
-        compile_cmd = [
-            "nvcc", 
-            "-shared", 
-            "-Xcompiler", "-fPIC",
-            "bezier_curves.cu", 
-            "-o", self.cuda_lib_path
-        ]
-        
-        try:
-            result = subprocess.run(compile_cmd, capture_output=True, text=True)
-            if result.returncode != 0:
-                print("Compilation failed!")
-                print("STDOUT:", result.stdout)
-                print("STDERR:", result.stderr)
-                sys.exit(1)
-            print("Compilation successful!")
-        except FileNotFoundError:
-            print("Error: nvcc not found. Make sure CUDA toolkit is installed and in PATH.")
-            sys.exit(1)
-        
-        # Load the shared library
-        try:
-            self.lib = ctypes.CDLL(f"./{self.cuda_lib_path}")
-            self._setup_function_signatures()
-            print("Library loaded successfully!")
-        except OSError as e:
-            print(f"Error loading library: {e}")
-            sys.exit(1)
+    for i, points in enumerate(control_points_list):
+        for j, (x, y) in enumerate(points):
+            curves[i].CP[j*2] = x
+            curves[i].CP[j*2+1] = y
     
-    def _create_helper_math(self):
-        """Create a minimal helper_math.h if it doesn't exist"""
-        helper_math_content = """
-#ifndef HELPER_MATH_H
-#define HELPER_MATH_H
-
-#include <cuda_runtime.h>
-#include <math.h>
-
-// Basic float2 operations
-__device__ __host__ inline float2 make_float2(float x, float y) {
-    float2 t; t.x = x; t.y = y; return t;
-}
-
-__device__ __host__ inline float2 operator+(float2 a, float2 b) {
-    return make_float2(a.x + b.x, a.y + b.y);
-}
-
-__device__ __host__ inline float2 operator-(float2 a, float2 b) {
-    return make_float2(a.x - b.x, a.y - b.y);
-}
-
-__device__ __host__ inline float2 operator*(float s, float2 a) {
-    return make_float2(s * a.x, s * a.y);
-}
-
-__device__ __host__ inline float2 operator/(float2 a, float s) {
-    return make_float2(a.x / s, a.y / s);
-}
-
-__device__ __host__ inline float length(float2 v) {
-    return sqrtf(v.x * v.x + v.y * v.y);
-}
-
-__device__ __host__ inline float dot(float2 a, float2 b) {
-    return a.x * b.x + a.y * b.y;
-}
-
-#endif
-"""
-        with open("helper_math.h", "w") as f:
-            f.write(helper_math_content)
-        print("Created helper_math.h")
+    # Tessellate
+    result = lib.tessellate_bezier_curves(curves, n)
+    if result != 0:
+        print(f"Tessellation failed: {result}")
+        return []
     
-    def _setup_function_signatures(self):
-        """Setup function signatures for ctypes"""
-        # tessellate_bezier_curves function
-        self.lib.tessellate_bezier_curves.argtypes = [
-            ctypes.POINTER(BezierLineC), 
-            ctypes.c_int
-        ]
-        self.lib.tessellate_bezier_curves.restype = ctypes.c_int
-        
-        # Helper functions
-        self.lib.get_cuda_device_count.restype = ctypes.c_int
-        self.lib.print_cuda_error.argtypes = []
-        self.lib.print_cuda_error.restype = None
+    # Extract results
+    tessellated = []
+    for i in range(n):
+        nv = curves[i].nVertices
+        if nv > 0:
+            vertices = []
+            for j in range(nv):
+                x = curves[i].vertexPos[j*2]
+                y = curves[i].vertexPos[j*2+1]
+                vertices.append([x, y])
+            tessellated.append(np.array(vertices))
+        else:
+            tessellated.append(np.array([]))
     
-    def tessellate(self, curves: List[BezierCurve]) -> List[np.ndarray]:
-        """
-        Tessellate Bezier curves using CUDA
-        
-        Args:
-            curves: List of BezierCurve objects
-            
-        Returns:
-            List of numpy arrays, each containing tessellated points (Nx2)
-        """
-        if not curves:
-            return []
-        
-        # Convert to C structures
-        n_curves = len(curves)
-        c_lines = (BezierLineC * n_curves)()
-        for i, curve in enumerate(curves):
-            c_lines[i] = curve.to_c_struct()
-        
-        # Call CUDA function
-        result = self.lib.tessellate_bezier_curves(c_lines, n_curves)
-        
-        if result != 0:
-            print(f"CUDA tessellation failed with error code: {result}")
-            self.lib.print_cuda_error()
-            return []
-        
-        # Extract results
-        tessellated_curves = []
-        for i in range(n_curves):
-            n_vertices = c_lines[i].nVertices
-            if n_vertices > 0:
-                # Extract vertices
-                vertices = np.zeros((n_vertices, 2))
-                for j in range(n_vertices):
-                    vertices[j, 0] = c_lines[i].vertexPos[j * 2]     # x
-                    vertices[j, 1] = c_lines[i].vertexPos[j * 2 + 1] # y
-                tessellated_curves.append(vertices)
-            else:
-                tessellated_curves.append(np.array([]))
-        
-        return tessellated_curves
-    
-    def get_device_count(self) -> int:
-        """Get number of CUDA devices"""
-        return self.lib.get_cuda_device_count()
+    return tessellated
 
-def create_sample_curves() -> List[BezierCurve]:
-    """Create some interesting sample Bezier curves"""
-    curves = [
-        # Simple arc
-        BezierCurve(p0=(0.0, 0.0), p1=(0.5, 1.0), p2=(1.0, 0.0)),
-        
-        # S-curve
-        BezierCurve(p0=(0.0, 1.0), p1=(0.8, 1.5), p2=(1.0, 2.0)),
-        
-        # Sharp turn
-        BezierCurve(p0=(1.0, 2.0), p1=(1.8, 1.2), p2=(2.0, 2.0)),
-        
-        # Loop-like curve
-        BezierCurve(p0=(2.0, 0.0), p1=(3.5, 1.5), p2=(2.5, 0.5)),
-        
-        # Nearly straight line (low curvature)
-        BezierCurve(p0=(0.0, 3.0), p1=(1.0, 3.1), p2=(2.0, 3.0)),
-        
-        # High curvature curve
-        BezierCurve(p0=(2.5, 1.0), p1=(4.0, 0.0), p2=(2.5, 2.0)),
-    ]
-    return curves
-
-def plot_curves(curves: List[BezierCurve], tessellated: List[np.ndarray]):
-    """Visualize the original control points and tessellated curves"""
+def plot_curves(control_points_list, tessellated):
+    """Visualize the original control points and tessellated curves (original style)"""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
     # Colors for different curves
-    colors = plt.cm.tab10(np.linspace(0, 1, len(curves)))
+    colors = plt.cm.tab10(np.linspace(0, 1, len(control_points_list)))
     
     # Plot 1: Control points and theoretical curves
     ax1.set_title("Bezier Curves - Control Points", fontsize=14, fontweight='bold')
     
-    for i, (curve, color) in enumerate(zip(curves, colors)):
+    for i, (cp, color) in enumerate(zip(control_points_list, colors)):
         # Plot control points
-        control_x = [curve.p0[0], curve.p1[0], curve.p2[0]]
-        control_y = [curve.p0[1], curve.p1[1], curve.p2[1]]
+        cp_array = np.array(cp)
+        control_x = cp_array[:, 0]
+        control_y = cp_array[:, 1]
         
         ax1.plot(control_x, control_y, 'o--', color=color, alpha=0.7, 
                 linewidth=1, markersize=6, label=f'Curve {i+1} Control')
         
         # Plot theoretical Bezier curve (for reference)
         t = np.linspace(0, 1, 100)
-        x_theo = (1-t)**2 * curve.p0[0] + 2*(1-t)*t * curve.p1[0] + t**2 * curve.p2[0]
-        y_theo = (1-t)**2 * curve.p0[1] + 2*(1-t)*t * curve.p1[1] + t**2 * curve.p2[1]
+        x_theo = (1-t)**2 * cp[0][0] + 2*(1-t)*t * cp[1][0] + t**2 * cp[2][0]
+        y_theo = (1-t)**2 * cp[0][1] + 2*(1-t)*t * cp[1][1] + t**2 * cp[2][1]
         ax1.plot(x_theo, y_theo, '-', color=color, alpha=0.8, linewidth=2)
     
     ax1.grid(True, alpha=0.3)
@@ -247,7 +92,7 @@ def plot_curves(curves: List[BezierCurve], tessellated: List[np.ndarray]):
     # Plot 2: CUDA tessellated curves
     ax2.set_title("CUDA Tessellated Curves", fontsize=14, fontweight='bold')
     
-    for i, (curve, tess_points, color) in enumerate(zip(curves, tessellated, colors)):
+    for i, (cp, tess_points, color) in enumerate(zip(control_points_list, tessellated, colors)):
         if len(tess_points) > 0:
             # Plot tessellated points
             ax2.plot(tess_points[:, 0], tess_points[:, 1], 'o-', color=color, 
@@ -270,16 +115,16 @@ def plot_curves(curves: List[BezierCurve], tessellated: List[np.ndarray]):
     plt.show()
     plt.savefig("bezier_curve_visualization.png")
 
-def analyze_tessellation(curves: List[BezierCurve], tessellated: List[np.ndarray]):
-    """Analyze the tessellation results"""
+def analyze_tessellation(control_points_list, tessellated):
+    """Analyze the tessellation results (original style)"""
     print("\n" + "="*60)
     print("TESSELLATION ANALYSIS")
     print("="*60)
     
-    for i, (curve, tess_points) in enumerate(zip(curves, tessellated)):
+    for i, (cp, tess_points) in enumerate(zip(control_points_list, tessellated)):
         if len(tess_points) > 0:
             # Calculate curvature estimate
-            p0, p1, p2 = np.array(curve.p0), np.array(curve.p1), np.array(curve.p2)
+            p0, p1, p2 = np.array(cp[0]), np.array(cp[1]), np.array(cp[2])
             chord = p2 - p0
             to_control = p1 - p0
             
@@ -293,48 +138,51 @@ def analyze_tessellation(curves: List[BezierCurve], tessellated: List[np.ndarray
                 curvature = 0.0
             
             print(f"Curve {i+1}:")
-            print(f"  Control Points: {curve.p0} -> {curve.p1} -> {curve.p2}")
+            print(f"  Control Points: {cp[0]} -> {cp[1]} -> {cp[2]}")
             print(f"  Estimated Curvature: {curvature:.4f}")
             print(f"  Tessellation Points: {len(tess_points)}")
             print(f"  Point Density: {len(tess_points)/chord_length:.2f} pts/unit" if chord_length > 0 else "  Point Density: N/A")
             print()
 
-def main():
-    """Main function to demonstrate Bezier curve tessellation"""
+# Test it
+if __name__ == "__main__":
     print("CUDA Bezier Curve Tessellation Demo")
     print("="*50)
     
-    # Initialize tessellator
-    tessellator = BezierTessellator()
+    # Create sample curves (like original)
+    curves = [
+        # Simple arc
+        [(0.0, 0.0), (0.5, 1.0), (1.0, 0.0)],
+        
+        # S-curve
+        [(0.0, 1.0), (0.8, 1.5), (1.0, 2.0)],
+        
+        # Sharp turn
+        [(1.0, 2.0), (1.8, 1.2), (2.0, 2.0)],
+        
+        # Loop-like curve
+        [(2.0, 0.0), (3.5, 1.5), (2.5, 0.5)],
+        
+        # Nearly straight line (low curvature)
+        [(0.0, 3.0), (1.0, 3.1), (2.0, 3.0)],
+        
+        # High curvature curve
+        [(2.5, 1.0), (4.0, 0.0), (2.5, 2.0)],
+    ]
     
-    # Check CUDA devices
-    device_count = tessellator.get_device_count()
-    print(f"CUDA devices available: {device_count}")
-    
-    if device_count == 0:
-        print("No CUDA devices found! Exiting.")
-        return
-    
-    # Create sample curves
-    curves = create_sample_curves()
     print(f"Created {len(curves)} sample Bezier curves")
-    
-    # Tessellate curves
     print("Tessellating curves using CUDA...")
-    tessellated = tessellator.tessellate(curves)
+    
+    tessellated = simple_tessellate(curves)
     
     if not tessellated:
         print("Tessellation failed!")
-        return
-    
-    print("Tessellation successful!")
-    
-    # Analyze results
-    analyze_tessellation(curves, tessellated)
-    
-    # Visualize results
-    print("Displaying visualization...")
-    plot_curves(curves, tessellated)
-
-if __name__ == "__main__":
-    main()
+    else:
+        print("Tessellation successful!")
+        
+        # Analyze results
+        analyze_tessellation(curves, tessellated)
+        
+        # Visualize results
+        print("Displaying visualization...")
+        plot_curves(curves, tessellated)
