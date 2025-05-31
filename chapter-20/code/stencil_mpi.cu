@@ -113,10 +113,10 @@ void data_server(int dimx, int dimy, int dimz, int nreps) {
 
     /* Store output data */
     store_output(output, dimx, dimy, dimz);
-    
+
     /* Wait for compute nodes to finish cleanup */
     MPI_Barrier(MPI_COMM_WORLD);
-    
+
     /* Release resources */
     free(input);
     free(output);
@@ -139,7 +139,7 @@ void compute_node_stencil(int dimx, int dimy, int dimz, int nreps) {
         printf("Process %d: failed to allocate host memory\n", pid);
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
+
     /* Allocate device memory for input and output data */
     float* d_input = NULL;
     cudaError_t err = cudaMalloc((void**)&d_input, num_bytes);
@@ -147,10 +147,10 @@ void compute_node_stencil(int dimx, int dimy, int dimz, int nreps) {
         printf("Process %d: GPU memory allocation failed: %s\n", pid, cudaGetErrorString(err));
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
+
     float* rcv_address = h_input + ((0 == pid) ? num_halo_points : 0);
     MPI_Recv(rcv_address, num_points, MPI_FLOAT, server_process, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-    
+
     err = cudaMemcpy(d_input, h_input, num_bytes, cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
         printf("Process %d: failed to copy data to GPU: %s\n", pid, cudaGetErrorString(err));
@@ -163,13 +163,13 @@ void compute_node_stencil(int dimx, int dimy, int dimz, int nreps) {
         printf("Process %d: failed to allocate host output memory\n", pid);
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
+
     err = cudaMalloc((void**)&d_output, num_bytes);
     if (err != cudaSuccess) {
         printf("Process %d: GPU output memory allocation failed: %s\n", pid, cudaGetErrorString(err));
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
+
     float *h_left_boundary = NULL, *h_right_boundary = NULL;
     float *h_left_halo = NULL, *h_right_halo = NULL;
     /* Allocate host memory for halo data */
@@ -178,11 +178,11 @@ void compute_node_stencil(int dimx, int dimy, int dimz, int nreps) {
         printf("Process %d: failed to allocate pinned memory: %s\n", pid, cudaGetErrorString(err));
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
+
     cudaHostAlloc((void**)&h_right_boundary, num_halo_bytes, cudaHostAllocDefault);
     cudaHostAlloc((void**)&h_left_halo, num_halo_bytes, cudaHostAllocDefault);
     cudaHostAlloc((void**)&h_right_halo, num_halo_bytes, cudaHostAllocDefault);
-    
+
     /* Create streams used for stencil computation */
     cudaStream_t stream0, stream1;
     err = cudaStreamCreate(&stream0);
@@ -190,7 +190,7 @@ void compute_node_stencil(int dimx, int dimy, int dimz, int nreps) {
         printf("Process %d: failed to create stream0: %s\n", pid, cudaGetErrorString(err));
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
+
     err = cudaStreamCreate(&stream1);
     if (err != cudaSuccess) {
         printf("Process %d: failed to create stream1: %s\n", pid, cudaGetErrorString(err));
@@ -203,15 +203,15 @@ void compute_node_stencil(int dimx, int dimy, int dimz, int nreps) {
     /* Upload stencil coefficients */
     float dummy_coeff[5];
     upload_coefficients(dummy_coeff, 5);
-    
+
     int left_halo_offset = 0;
     int right_halo_offset = dimx * dimy * (4 + dimz);
     int left_stage1_offset = 0;
     int right_stage1_offset = dimx * dimy * (dimz - 4);
     int stage2_offset = num_halo_points;
-    
+
     MPI_Barrier(MPI_COMM_WORLD);
-    
+
     for (int i = 0; i < nreps; i++) {
         /* Compute boundary values needed by other nodes first */
         call_stencil_kernel(d_output + left_stage1_offset, d_input + left_stage1_offset, dimx, dimy, 12, stream0);
@@ -250,7 +250,7 @@ void compute_node_stencil(int dimx, int dimy, int dimz, int nreps) {
         printf("Process %d: failed to copy results to host: %s\n", pid, cudaGetErrorString(err));
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    
+
     float* send_address = h_output + num_halo_points;
     MPI_Send(send_address, dimx * dimy * dimz, MPI_FLOAT, server_process, DATA_COLLECT, MPI_COMM_WORLD);
     MPI_Barrier(MPI_COMM_WORLD);
@@ -272,11 +272,11 @@ int main(int argc, char* argv[]) {
     // Reasonable problem size for testing - you can increase these for production
     int pad = 0, dimx = 48 + pad, dimy = 48, dimz = 40, nreps = 10;
     int pid = -1, np = -1;
-    
+
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &pid);
     MPI_Comm_size(MPI_COMM_WORLD, &np);
-    
+
     if (np < 3) {
         if (0 == pid) {
             printf("Needed 3 or more processes.\n");
@@ -284,7 +284,7 @@ int main(int argc, char* argv[]) {
         MPI_Abort(MPI_COMM_WORLD, 1);
         return 1;
     }
-    
+
     // Check CUDA device availability and set device (only for compute nodes)
     if (pid < np - 1) {
         int deviceCount;
@@ -293,7 +293,7 @@ int main(int argc, char* argv[]) {
             printf("Process %d: CUDA not available: %s\n", pid, cudaGetErrorString(err));
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
-        
+
         // Set device (simple round-robin for multi-GPU systems)
         int device = pid % deviceCount;
         err = cudaSetDevice(device);
@@ -302,13 +302,13 @@ int main(int argc, char* argv[]) {
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
     }
-    
+
     if (pid < np - 1) {
         compute_node_stencil(dimx, dimy, dimz / (np - 1), nreps);
     } else {
         data_server(dimx, dimy, dimz, nreps);
     }
-    
+
     MPI_Finalize();
     return 0;
 }
