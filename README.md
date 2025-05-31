@@ -1,7 +1,16 @@
-# Programming Massively Parallel Processors book, solutions
+# Programming Massively Parallel Processors: Complete solutions
 
+![Book cover](image.png)
 
-The following repo documents my journey to learn CUDA programming. You can find code for examples from the book and detailed answers to the exercises. LFG.
+The following repo contains the complete answers to all the (in)famous Programming Massively Parallel Processors by David Kirk and Wen-mei Hwu. We present the complete set of answers for all chapters for Edition 4 of the book. Each chapter is organized as follows:
+
+```
+├── code
+│   ├── ...
+└── README.md
+```
+
+With code containing the code needed to replicate the examples mentioned in the chapter and `README.md` containing details on how to run the said code and also the detailed answers for the questions. For every answer, we try to include a "chain of thought" so that it is easier to follow and understand the argumentation and conclusions. 
 
 ## Where to find solutions by chapter
 
@@ -23,6 +32,17 @@ The following repo documents my journey to learn CUDA programming. You can find 
 - [Chapter 17](chapter-17/README.md)
 - [Chapter 18](chapter-18/README.md)
 - [Chapter 20](chapter-20/README.md)
+- [Chapter 21](chapter-20/README.md)
+
+
+## Contributing
+
+If you find an error in one of the answers, please open an issue. Ideally the issue should follow the standard below. 
+**Describe the bug**
+Describe where the problem is and what precisely is wrong.
+
+**Proposed solution**
+Here paste your proposed solution. Please include the reasoning behind why you believe your solution is correct.
 
 ## Running the code
 
