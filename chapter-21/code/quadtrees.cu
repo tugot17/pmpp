@@ -54,9 +54,9 @@ public:
     }
 
     // Compute the center of the bounding box
-    __host__ __device__ void compute_center(float2& center) const {
-        center.x = 0.5f * (m_p_min.x + m_p_max.x);
-        center.y = 0.5f * (m_p_min.y + m_p_max.y);
+    __host__ __device__ void compute_center(float2* center) const {
+        center->x = 0.5f * (m_p_min.x + m_p_max.x);
+        center->y = 0.5f * (m_p_min.y + m_p_max.y);
     }
 
     // The points of the box
@@ -166,21 +166,12 @@ struct Parameters {
           min_points_per_node(params.min_points_per_node) {}
 };
 
-// Function forward declarations (after class definitions)
-__device__ bool check_num_points_and_depth(Quadtree_node& node, Points* points, int num_points, Parameters params);
-__device__ void count_points_in_children(const Points& in_points, int* smem, int range_begin, int range_end,
-                                         float2 center);
-__device__ void scan_for_offsets(int node_points_begin, int* smem);
-__device__ void reorder_points(Points& out_points, const Points& in_points, int* smem, int range_begin, int range_end,
-                               float2 center);
-__device__ void prepare_children(Quadtree_node* children, Quadtree_node& node, const Bounding_box& bbox, int* smem);
-
 // Check the number of points and its depth
-__device__ bool check_num_points_and_depth(Quadtree_node& node, Points* points, int num_points, Parameters params) {
+__device__ bool check_num_points_and_depth(Quadtree_node* node, Points* points, int num_points, Parameters params) {
     if (params.depth >= params.max_depth || num_points <= params.min_points_per_node) {
         // Stop the recursion here. Make sure points[0] contains all the points
         if (params.point_selector == 1) {
-            int it = node.points_begin(), end = node.points_end();
+            int it = node->points_begin(), end = node->points_end();
             for (it += threadIdx.x; it < end; it += blockDim.x) {
                 if (it < end) {
                     points[0].set_point(it, points[1].get_point(it));
@@ -233,7 +224,7 @@ __device__ void scan_for_offsets(int node_points_begin, int* smem) {
 }
 
 // Reorder points in order to group the points in each quadrant
-__device__ void reorder_points(Points& out_points, const Points& in_points, int* smem, int range_begin, int range_end,
+__device__ void reorder_points(Points* out_points, const Points& in_points, int* smem, int range_begin, int range_end,
                                float2 center) {
     int* smem2 = &smem[4];
     // Reorder points
@@ -254,14 +245,14 @@ __device__ void reorder_points(Points& out_points, const Points& in_points, int*
 
         // Move point to its destination
         if (dest >= 0) {
-            out_points.set_point(dest, p);
+            out_points->set_point(dest, p);
         }
     }
     __syncthreads();
 }
 
 // Prepare children launch
-__device__ void prepare_children(Quadtree_node* children, Quadtree_node& node, const Bounding_box& bbox, int* smem) {
+__device__ void prepare_children(Quadtree_node* children, Quadtree_node* node, const Bounding_box& bbox, int* smem) {
     if (threadIdx.x == 0) {
         // Points to the bounding-box
         const float2& p_min = bbox.get_min();
@@ -269,7 +260,7 @@ __device__ void prepare_children(Quadtree_node* children, Quadtree_node& node, c
 
         // Compute center for children bounding boxes
         float2 center;
-        bbox.compute_center(center);
+        bbox.compute_center(&center);
 
         int* smem2 = &smem[4];  // Starting positions for each quadrant
 
@@ -299,9 +290,9 @@ __global__ void build_quadtree_kernel(Quadtree_node* nodes, Points* points, Para
     __shared__ int smem[8];  // To store the number of points in each quadrant
 
     // The current node in the quadtree
-    Quadtree_node& node = nodes[blockIdx.x];
+    Quadtree_node* node = &nodes[blockIdx.x];
 
-    int num_points = node.num_points();  // The number of points in the node
+    int num_points = node->num_points();  // The number of points in the node
 
     // Check the number of points and its depth
     bool exit = check_num_points_and_depth(node, points, num_points, params);
@@ -310,21 +301,21 @@ __global__ void build_quadtree_kernel(Quadtree_node* nodes, Points* points, Para
     }
 
     // Compute the center of the bounding box of the points
-    const Bounding_box& bbox = node.bounding_box();
+    const Bounding_box& bbox = node->bounding_box();
     float2 center;
-    bbox.compute_center(center);
+    bbox.compute_center(&center);
 
     // Range of points
-    int range_begin = node.points_begin();
-    int range_end = node.points_end();
-    const Points& in_points = points[params.point_selector];       // Input points
-    Points& out_points = points[(params.point_selector + 1) % 2];  // Output points
+    int range_begin = node->points_begin();
+    int range_end = node->points_end();
+    const Points& in_points = points[params.point_selector];        // Input points
+    Points* out_points = &points[(params.point_selector + 1) % 2];  // Output points
 
     // Count the number of points in each child
     count_points_in_children(in_points, smem, range_begin, range_end, center);
 
     // Scan the quadrants' results to know the reordering offset
-    scan_for_offsets(node.points_begin(), smem);
+    scan_for_offsets(node->points_begin(), smem);
 
     // Move points
     reorder_points(out_points, in_points, smem, range_begin, range_end, center);

@@ -1,52 +1,46 @@
 repos:
-  - repo: https://github.com/pycqa/isort
-    rev: 6.0.1
-    hooks:
-      - id: isort
-        name: isort (python)
-        args: ["--filter-files"]
-        verbose: true
-
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.8.5
-    hooks:
-      - id: nbqa-isort
-        name: isort (nbs)
-        args: ["--filter-files"]
-        additional_dependencies: [isort]
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.5
-    hooks:
-      - id: ruff
-        name: ruff-lint
-        args: [ --fix ]
-        types_or: [ python, pyi, jupyter ]
-      - id: ruff-format
-        types_or: [ python, pyi, jupyter ]
-
-  - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.6
-    hooks:
-      - id: codespell
-        args: ["--ignore-words-list=ans,COO,coo"]
-        exclude: '\.ipynb$'
-
-  - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v17.0.6
-    hooks:
-      - id: clang-format
-        types_or: [c++, c, cuda]
-        args: ['-style=file']
-
-  - repo: https://github.com/cpplint/cpplint
-    rev: 1.6.1
-    hooks:
-      - id: cpplint
-        name: cpplint
-        types_or: [c++, cuda]
-        args: [
-          ### the build thing is too annoying to manage in such a simple project, runtime/threadsafe_fn - this doesn't like rand so we ignore it
-          '--filter=-legal/copyright,-build/include_order,-readability/casting,-runtime/threadsafe_fn,-build/include_subdir',
-          '--linelength=120'
-        ]
+ - repo: https://github.com/pycqa/isort
+   rev: 6.0.1
+   hooks:
+    - id: isort
+      name: isort (python)
+      args: ["--filter-files"]
+      verbose: true
+ - repo: https://github.com/nbQA-dev/nbQA
+   rev: 1.8.5
+   hooks:
+    - id: nbqa-isort
+      name: isort (nbs)
+      args: ["--filter-files"]
+      additional_dependencies: [isort]
+ - repo: https://github.com/astral-sh/ruff-pre-commit
+   rev: v0.3.5
+   hooks:
+    - id: ruff
+      name: ruff-lint
+      args: [ --fix ]
+      types_or: [ python, pyi, jupyter ]
+    - id: ruff-format
+      types_or: [ python, pyi, jupyter ]
+ - repo: https://github.com/codespell-project/codespell
+   rev: v2.2.6
+   hooks:
+    - id: codespell
+      args: ["--ignore-words-list=ans,COO,coo"]
+      exclude: '\.ipynb$'
+ - repo: https://github.com/pre-commit/mirrors-clang-format
+   rev: v17.0.6
+   hooks:
+    - id: clang-format
+      types_or: [c++, c, cuda]
+      args: ['-style=file']
+ - repo: https://github.com/cpplint/cpplint
+   rev: 1.6.1
+   hooks:
+    - id: cpplint
+      name: cpplint
+      types_or: [c++, cuda]
+      args: [
+        '--filter=-legal/copyright,-build/include_order,-readability/casting,-runtime/threadsafe_fn,-build/include_subdir,-whitespace/indent',
+        '--linelength=120'
+      ]
