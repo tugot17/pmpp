@@ -2,6 +2,39 @@
 
 ## Code
 
+```bash
+nvcc -shared -o libbezier.so -lcuda --compiler-options '-fPIC' -rdc=true bezier_curves.cu
+
+python bezier.py
+```
+
+```logs
+...
+
+============================================================
+PERFORMANCE BENCHMARK
+============================================================
+
+Benchmarking with 100 curves:
+  Static:  1.069 ms
+  Dynamic: 1.342 ms
+  Speedup: 0.80x (Static faster)
+
+Benchmarking with 500 curves:
+  Static:  5.261 ms
+  Dynamic: 5.732 ms
+  Speedup: 0.92x (Static faster)
+
+Benchmarking with 1000 curves:
+  Static:  10.552 ms
+  Dynamic: 11.184 ms
+  Speedup: 0.94x (Static faster)
+Displaying comparison visualization...
+```
+
+![reconstruction](code/bezier_comparison_static_vs_dynamic.png)
+
+
 ## Exercises
 
 ### Exercise 1
