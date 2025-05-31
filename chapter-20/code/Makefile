@@ -27,6 +27,6 @@ clean:
 
 # Run with 4 processes
 run: $(TARGET)
-	mpirun -np 4 ./$(TARGET)
+	mpirun -np 3 ./$(TARGET)
 
 .PHONY: clean run alt

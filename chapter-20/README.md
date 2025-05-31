@@ -2,6 +2,20 @@
 
 ## Code
 
+We replicate the MPI stencil kernel described in the chapter. We provide the code for the kernels and also the host function. To run it, run:
+
+```bash
+make run
+```
+You should see something resembling
+
+```logs
+nvcc -o stencil_mpi stencil_mpi.cu -I/usr/lib/x86_64-linux-gnu/openmpi/include -I/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi -L/usr/lib/x86_64-linux-gnu/openmpi/lib -lmpi
+mpirun -np 3 ./stencil_mpi
+Output computed for grid 48 x 48 x 40
+First few output values: 23817476.000 -14936832.000 40859312.000 33115106.000 71862064.000 
+```
+
 ## Exercises
 
 ### Exercise 1
