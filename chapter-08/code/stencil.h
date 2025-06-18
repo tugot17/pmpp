@@ -1,5 +1,5 @@
-#ifndef CHAPTER_8_CODE_STENCIL_H_
-#define CHAPTER_8_CODE_STENCIL_H_
+#ifndef CHAPTER_08_CODE_STENCIL_H_
+#define CHAPTER_08_CODE_STENCIL_H_
 
 #include <cuda_runtime.h>
 #include <stdio.h>
@@ -57,4 +57,4 @@ void stencil_3d_parallel_thread_coarsening(float* in, float* out, unsigned int N
 void stencil_3d_parallel_register_tiling(float* in, float* out, unsigned int N, int c0, int c1, int c2, int c3, int c4,
                                          int c5, int c6);
 
-#endif  // CHAPTER_8_CODE_STENCIL_H_
+#endif  // CHAPTER_08_CODE_STENCIL_H_
