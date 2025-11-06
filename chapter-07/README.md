@@ -228,7 +228,7 @@ This brings us to the total of:
 
 We need to run a block for each output tile. So we run 
 
-`[(N + T - 1)/1, (N + T - 1)/1]` blocks. 
+`[(N + T - 1)/T, (N + T - 1)/T]` blocks. 
 
 **b. How many threads are needed per block?**
 
@@ -244,7 +244,7 @@ Each block needs `IN_TILE x IN_TILE x 4 bytes` for shared memory, so `(T + (M-1)
 
 Each output tile will have its own block, so for the grid size, nothing changes:
 
-`[(N + T - 1)/1, (N + T - 1)/1]`
+`[(N + T - 1)/T, (N + T - 1)/T]`
 
 But now each block will be of size `T x T`.
 
