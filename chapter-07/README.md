@@ -138,7 +138,8 @@ To estimate the number of these, let's start by looking at the calculations we d
 
 We know that `Σ(x=1 to n) x = n(n+1)/2`. 
 
-Therefore, `Σ(x=1 to r) Σ(y=1 to r) xy = [Σ(x=1 to r) x][Σ(y=1 to r) y] = = [r(r+1)/2][r(r+1)/2] = [r(r+1)/2]²`
+Therefore,
+$$\sum_{x=1}^r\sum_{y=1}^r [xy] = \left(\sum_{x=1}^r x\right) \left( \sum_{x=1}^r y\right) = \frac{r(r+1)}{2} \times \frac{r(r+1)}{2} = \left( \frac{r(r+1)}{2} \right)^2 $$
 
 For `r=1` we have 1, for `r=2` we have 9, etc. This makes sense. Remember that we have 4 corners, so we need to multiply it by 4. 
  
@@ -156,7 +157,7 @@ Summing it up, we have `NxN x MxM` multiplications minus what we lose at the edg
 
 The mask is of size `M₁ × M₂`. Let's say that the notation that it has a radius of `r₁` and `r₂`, where `r₁ = (M₁-1)/2` and `r₂=(M₂-1)/2`.
 
-There are `N₁ x r₂` ghost cells on the left and `N₁ x r₂` cells on the right. There are `N₂ x r₁ghost cells on the bottom and on the top of the e matri  So the total of `2 x (N₁ x r₂ + N₂ x r₁)` ghost cells surrounding the matrix. Then there are also `r₁ x r₂` ghost cells at each of the four corners, bringing it to the total of `2 x (N₁ x r₂ + N₂ x r₁) + 4(r₁ x r₂)` ghost cells. 
+There are `N₁ x r₂` ghost cells on the left and `N₁ x r₂` cells on the right. There are `N₂ x r₁` ghost cells on the bottom and on the top of the matrix. So the total of `2 x (N₁ x r₂ + N₂ x r₁)` ghost cells surrounding the matrix. Then there are also `r₁ x r₂` ghost cells at each of the four corners, bringing it to the total of `2 x (N₁ x r₂ + N₂ x r₁) + 4(r₁ x r₂)` ghost cells. 
 
 **b. How many multiplications are performed if ghost cells are treated as multiplications (by 0)?**
 
@@ -174,7 +175,7 @@ Now we need to do the same for columns. We have `N₂` columns. For each one, on
 
 Now the truly tricky part: calculating how many multiplications we "lose" at the corners. Similarly to what we did in **5c**, we can calculate it as:
 
-`Σ(x=1 to r₁) Σ(y=1 to r₂) [xy] = = [Σ(x=1 to r₁) x][Σ(y=1 to r₂) y] = [r₁(r₁+1)/2][r₂(r₂+1)/2]`
+$$\sum_{x=1}^{r_1}\sum_{y=1}^{r_2} [xy] = \left(\sum_{x=1}^{r_1}x\right) \left( \sum_{x=1}^{r_2}y\right) = \frac{r_1(r_1+1)}{2} \times \frac{r_2(r_2+1)}{2} $$
 
 Plus we need to remember that we have four corners. 
 
