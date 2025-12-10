@@ -156,7 +156,7 @@ Summing it up, we have `NxN x MxM` multiplications minus what we lose at the edg
 
 The mask is of size `M₁ × M₂`. Let's say that the notation that it has a radius of `r₁` and `r₂`, where `r₁ = (M₁-1)/2` and `r₂=(M₂-1)/2`.
 
-There are `N₁ x r₂` ghost cells on the left and `N₁ x r₂` cells on the right. There are `N₂ x r₁` ghost cells on the bottom and on the top of the e matri  So the total of `2 x (N₁ x r₂ + N₂ x r₁)` ghost cells surrounding the matrix. Then there are also `r₁ x r₂` ghost cells at each of the four corners, bringing it to the total of `2 x (N₁ x r₂ + N₂ x r₁) + 4(r₁ x r₂)` ghost cells. 
+There are `N₁ x r₂` ghost cells on the left and `N₁ x r₂` cells on the right. There are `N₂ x r₁` ghost cells on the bottom and on the top of the matrix. So the total of `2 x (N₁ x r₂ + N₂ x r₁)` ghost cells surrounding the matrix. Then there are also `r₁ x r₂` ghost cells at each of the four corners, bringing it to the total of `2 x (N₁ x r₂ + N₂ x r₁) + 4(r₁ x r₂)` ghost cells. 
 
 **b. How many multiplications are performed if ghost cells are treated as multiplications (by 0)?**
 
