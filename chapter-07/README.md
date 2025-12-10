@@ -138,7 +138,8 @@ To estimate the number of these, let's start by looking at the calculations we d
 
 We know that `Σ(x=1 to n) x = n(n+1)/2`. 
 
-Therefore, `Σ(x=1 to r) Σ(y=1 to r) xy = [Σ(x=1 to r) x][Σ(y=1 to r) y] = = [r(r+1)/2][r(r+1)/2] = [r(r+1)/2]²`
+Therefore,
+$$\sum_{x=1}^r\sum_{y=1}^r [xy] = \left(\sum_{x=1}^r x\right) \left( \sum_{x=1}^r y\right) = \frac{r(r+1)}{2} \times \frac{r(r+1)}{2} = \left( \frac{r(r+1)}{2} \right)^2 $$
 
 For `r=1` we have 1, for `r=2` we have 9, etc. This makes sense. Remember that we have 4 corners, so we need to multiply it by 4. 
  
@@ -174,7 +175,7 @@ Now we need to do the same for columns. We have `N₂` columns. For each one, on
 
 Now the truly tricky part: calculating how many multiplications we "lose" at the corners. Similarly to what we did in **5c**, we can calculate it as:
 
-`Σ(x=1 to r₁) Σ(y=1 to r₂) [xy] = = [Σ(x=1 to r₁) x][Σ(y=1 to r₂) y] = [r₁(r₁+1)/2][r₂(r₂+1)/2]`
+$$\sum_{x=1}^{r_1}\sum_{y=1}^{r_2} [xy] = \left(\sum_{x=1}^{r_1}x\right) \left( \sum_{x=1}^{r_2}y\right) = \frac{r_1(r_1+1)}{2} \times \frac{r_2(r_2+1)}{2} $$
 
 Plus we need to remember that we have four corners. 
 
