@@ -151,4 +151,4 @@ In the column-major order the array is linearized using the formula `col x heigh
 ### Exercise 5
 Consider a 3D tensor with a width of 400, a height of 500, and a depth of 300. The tensor is stored as a one-dimensional array in row-major order. Specify the array index of the tensor element at x = 10, y = 20, and z = 5.
 
-The linearized index of of an element in a 3d tensor will be calculated using the foltmula `plane x width x height + row x width + col`, so the index will be `5 x 400 x 500 + 20 x 400 + 10 = 100,000,000 + 8,000 + 10 = 1.008.010`
+The linearized index of of an element in a 3d tensor will be calculated using the foltmula `plane x width x height + row x width + col`, so the index will be `5 x 400 x 500 + 20 x 400 + 10 = 100,000,000 + 8,000 + 10 = 1,008,010`
