@@ -164,7 +164,7 @@ There will be `2048 / 32 = 64` warps in total. The warp covering threads `2015-2
 ### Exercise 4
 **Consider a hypothetical block with 8 threads executing a section of code before reaching a barrier. The threads require the following amount of time (in microseconds) to execute the sections: 2.0, 2.3, 3.0, 2.8, 2.4, 1.9, 2.6, and 2.9; they spend the rest of their time waiting for the barrier. What percentage of the threads’ total execution time is spent waiting for the barrier?**
 
-To answer this, we need to identify the thread spending most of the time in the section; in this case, it is `3.0 ms`. Then we need to calculate the delta between the time it takes to execute the section for every thread. In this case, it is `(3.0 - 2.0) + (3.0 - 2.3) + (3.0 - 3.0) + (3.0 - 2.8) + (3.0 - 2.4) + (3.0 - 1.9) + (3.0 - 2.6) = 1.0 + 0.7 + 0.0 + 0.2 + 0.6 + 1.1 + 0.4 = 4.0`. Last but not least, we need to divide the delta by the total time spent on the execution: `8x3.0=24.0`ms. In this case, it will be `4.0/24.0=0.16=16%`, so 16% of the execution time is spent waiting for the barrier. 
+To answer this, we need to identify the thread spending most of the time in the section; in this case, it is `3.0µs`. Then we need to calculate the delta between the time it takes to execute the section for every thread. In this case, it is `(3.0 - 2.0) + (3.0 - 2.3) + (3.0 - 3.0) + (3.0 - 2.8) + (3.0 - 2.4) + (3.0 - 1.9) + (3.0 - 2.6) + (3.0 - 2.9) = 1.0 + 0.7 + 0.0 + 0.2 + 0.6 + 1.1 + 0.4 + 0.1 = 4.1`. Last but not least, we need to divide the delta by the total time spent on the execution: `8x3.0=24.0`ms. In this case, it will be `4.1/24.0=0.17=17%`, so 17% of the execution time is spent waiting for the barrier.
 
 
 ### Exercise 5
