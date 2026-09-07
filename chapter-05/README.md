@@ -194,11 +194,11 @@ As above, there is one copy of the array `x[]` for each thread in the grid, so `
 
 **c. How many versions of the variable y_s are there?**
 
-`y_s` is the variable stored in the shared memory. There is one copy of a variable per block in the grid. Since we have 128 blocks in the grid (see a), therefore we have `128` versions of the variable `y_s`.
+`y_s` is the variable stored in the shared memory. There is one copy of a variable per block in the grid. Since we have 8 blocks in the grid (see a), therefore we have `8` versions of the variable `y_s`.
 
 **d. How many versions of the array b_s[] are there?**
 
-Same as in c, 128 blocks, so `128` versions of `b_s` stored in the shared memory.
+Same as in c, 8 blocks, so `8` versions of `b_s` stored in the shared memory.
 
 **e. What is the amount of shared memory used per block (in bytes)?**
 
