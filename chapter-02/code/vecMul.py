@@ -29,7 +29,11 @@ def compile_extension():
         cuda_sources=cuda_source,
         functions=["vector_multiplication"],
         with_cuda=True,
-        # extra_cuda_cflags=["-O2"]
+        extra_cuda_cflags=[
+            "-O2",
+            "-gencode=arch=compute_120,code=sm_120",
+            "-gencode=arch=compute_120,code=compute_120",
+        ],
     )
 
 

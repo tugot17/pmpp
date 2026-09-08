@@ -25,5 +25,5 @@ torch::Tensor vector_multiplication(torch::Tensor A, torch::Tensor B) {
 
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
-    return A;
+    return C;
 }
