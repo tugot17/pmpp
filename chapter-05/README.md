@@ -216,7 +216,7 @@ Let's start with identifying all loading operations.
 2. Line 12: 1 load operation from `b`.
 3. 14: 4 `add` operations (`2.5f*x[0] + 3.7f*x[1] + 6.3f*x[2] + 8.5f*x[3]`), 1 multiply operation (`y_s*b_s[threadIdx.x]`), and two more add operations `y_s*b_s[threadIdx.x] + b_s[(threadIdx.x + 3)%128]`. 7 operations, including the variable loaded from the global memory in total. 
 
-So the ratio is 7 operations per 5 loads. Since each of the loaded variables is a float—4 bytes of memory. We have 7 operations and `5x4 bytes = 20 bytes` of memory loaded, so `7 operations/20 bytes` or `0.7 operations/byte`.
+So the ratio is 7 operations per 5 loads. Since each of the loaded variables is a float—4 bytes of memory. We have 7 operations and `5x4 bytes = 20 bytes` of memory loaded, so `7 operations/20 bytes` or `0.35 operations/byte`.
 
 ### Exercise 12
 
